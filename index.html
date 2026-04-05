@@ -13,9 +13,9 @@
             --card:   #161627;
             --nav:    #1a1a2e;
             --accent: #e94560;
-            --border: #252540;
-            --text:   #e0e0e0;
-            --muted:  #7a7a9a;
+            --border: #2e2e50;
+            --text:   #f0f0f5;
+            --muted:  #a8a8c8;
         }
         *, *::before, *::after { box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: system-ui, sans-serif; }
@@ -90,28 +90,57 @@
 
         /* ── VIEWER / MOVE LIST ──────────────────────────── */
         #viewer-board, #input-board { width: 100%; }
-        .board-b72b1 { border: 2px solid #333 !important; border-radius: 4px; overflow: hidden; }
-        .move-list { font-family: 'Courier New', monospace; max-height: 430px; overflow-y: auto; line-height: 2; }
+        .board-b72b1 { border: 2px solid #444 !important; border-radius: 4px; overflow: hidden; }
+
+        /* move list */
+        .move-list { font-family: 'Courier New', monospace; overflow-y: auto; line-height: 1.9; font-size: .97rem; }
         .move-btn {
             background: none; border: none; color: var(--text);
-            padding: 1px 6px; cursor: pointer; border-radius: 4px;
-            font-family: inherit; font-size: .95rem; transition: background .12s;
+            padding: 2px 7px; cursor: pointer; border-radius: 4px;
+            font-family: inherit; font-size: .97rem; transition: background .12s;
         }
-        .move-btn:hover { background: rgba(233,69,96,.25); }
-        .move-btn.active { background: var(--accent); color: #fff; }
-        .move-number { color: var(--muted); font-size: .82rem; margin-right: 2px; user-select: none; }
-        .move-result { color: var(--muted); margin-left: 4px; font-size: .88rem; }
-        .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 2px; }
+        .move-btn:hover { background: rgba(233,69,96,.28); }
+        .move-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+        .move-number { color: var(--muted); font-size: .85rem; margin-right: 1px; user-select: none; }
+        .move-result { color: #ccc; margin-left: 6px; font-size: .9rem; font-weight: 600; }
 
-        /* highlight squares for last move */
-        .highlight-from { background: rgba(255,200,0,.35) !important; }
-        .highlight-to   { background: rgba(255,200,0,.55) !important; }
+        /* PGN comments & annotations */
+        .pgn-comment {
+            color: #7dcfff; font-style: italic; font-size: .88rem;
+            margin: 0 4px; display: inline;
+        }
+        .pgn-nag {
+            color: #ff9e64; font-size: .92rem; margin-left: 1px;
+        }
+        /* variation (indented, dimmer) */
+        .pgn-variation {
+            display: block; margin: 2px 0 2px 1.6em;
+            color: #a0a0c0; font-size: .88rem; border-left: 2px solid var(--border);
+            padding-left: .6em;
+        }
+        .pgn-variation .move-btn { font-size: .88rem; color: #c0c0e0; }
+        .pgn-variation .move-number { font-size: .80rem; }
+
+        .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
+
+        /* highlight last move squares */
+        .highlight-from { background: rgba(255,200,0,.32) !important; }
+        .highlight-to   { background: rgba(255,200,0,.56) !important; }
 
         /* ── INPUT MODE ──────────────────────────────────── */
         .input-move-display {
-            font-family: 'Courier New', monospace; font-size: .88rem;
-            color: #b0b0d0; min-height: 2rem; line-height: 1.8;
+            font-family: 'Courier New', monospace; font-size: .9rem;
+            color: #d0d0f0; min-height: 2rem; line-height: 1.9;
         }
+
+        /* ── ANNOTATION EDITOR ───────────────────────────── */
+        #annotation-panel { border-top: 1px solid var(--border); margin-top: .75rem; padding-top: .75rem; }
+        .nag-btn {
+            background: var(--nav); border: 1px solid var(--border); color: var(--text);
+            border-radius: 4px; padding: 2px 8px; font-size: .88rem; cursor: pointer; transition: background .12s;
+        }
+        .nag-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .nag-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
         /* ── MISC ────────────────────────────────────────── */
         .view { display: none; }
@@ -501,32 +530,30 @@
             </div>
 
             <div class="row g-3">
-                <div class="col-12 col-lg-5 col-xl-4">
+                <!-- LEFT: board -->
+                <div class="col-12 col-xl-6">
                     <div class="card">
-                        <div class="card-body p-3">
+                        <div class="card-body p-2 p-md-3">
                             <div class="player-bar mb-1">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span style="width:13px;height:13px;background:#1a1a1a;border:2px solid #666;border-radius:50%;flex-shrink:0"></span>
-                                    <span class="fw-semibold small" id="v-black-name"></span>
+                                    <span style="width:14px;height:14px;background:#1a1a1a;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold" id="v-black-name"></span>
                                 </div>
                                 <span class="text-muted small" id="v-black-elo"></span>
                             </div>
-                            <div id="viewer-board"></div>
+                            <div id="viewer-board" style="max-width:600px;margin:0 auto"></div>
                             <div class="player-bar mt-1">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span style="width:13px;height:13px;background:#f0d9b5;border:2px solid #666;border-radius:50%;flex-shrink:0"></span>
-                                    <span class="fw-semibold small" id="v-white-name"></span>
+                                    <span style="width:14px;height:14px;background:#f0d9b5;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold" id="v-white-name"></span>
                                 </div>
                                 <span class="text-muted small" id="v-white-elo"></span>
                             </div>
-
                             <!-- Controls -->
                             <div class="d-flex justify-content-center gap-1 mt-3">
                                 <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goFirst()" title="Anfang (Home)"><i class="bi bi-skip-start-fill"></i></button>
                                 <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goPrev()"  title="Zurück (←)"><i class="bi bi-caret-left-fill"></i></button>
-                                <button class="btn btn-sm btn-outline-secondary px-3" id="autoplay-btn" onclick="Viewer.toggleAutoplay()" title="Abspielen (Leertaste)">
-                                    <i class="bi bi-play-fill"></i>
-                                </button>
+                                <button class="btn btn-sm btn-outline-secondary px-3" id="autoplay-btn" onclick="Viewer.toggleAutoplay()" title="Abspielen (Leertaste)"><i class="bi bi-play-fill"></i></button>
                                 <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goNext()"  title="Vor (→)"><i class="bi bi-caret-right-fill"></i></button>
                                 <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goLast()"  title="Ende (End)"><i class="bi bi-skip-end-fill"></i></button>
                                 <button class="btn btn-sm btn-outline-secondary px-2 ms-1" onclick="Viewer.flip()" title="Drehen (F)"><i class="bi bi-arrow-repeat"></i></button>
@@ -538,20 +565,58 @@
                     </div>
 
                     <div class="card mt-3">
-                        <div class="card-header"><small class="text-muted fw-semibold">PARTIE-INFO</small></div>
+                        <div class="card-header"><small class="fw-semibold" style="color:var(--muted)">PARTIE-INFO</small></div>
                         <div class="card-body py-2" id="v-info"></div>
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-7 col-xl-8">
-                    <div class="card">
-                        <div class="card-header"><small class="text-muted fw-semibold">ZUGLISTE</small></div>
-                        <div class="card-body p-3">
-                            <div id="move-list" class="move-list"></div>
+                <!-- RIGHT: move list + annotation editor -->
+                <div class="col-12 col-xl-6">
+                    <div class="card" style="height:100%">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <small class="fw-semibold" style="color:var(--muted)">ZUGLISTE</small>
+                            <button class="btn btn-xs btn-sm btn-outline-secondary py-0 px-2" onclick="Viewer.toggleAnnotationPanel()" id="annotate-toggle-btn" title="Kommentar / Bewertung einfügen">
+                                <i class="bi bi-pencil-square me-1"></i>Annotieren
+                            </button>
+                        </div>
+                        <div class="card-body p-3" style="display:flex;flex-direction:column;min-height:480px">
+                            <div id="move-list" class="move-list" style="flex:1;min-height:0"></div>
+
+                            <!-- Annotation panel (hidden by default) -->
+                            <div id="annotation-panel" style="display:none">
+                                <div class="mb-2">
+                                    <small class="text-muted fw-semibold d-block mb-1">ZUG-BEWERTUNG</small>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <button class="nag-btn" onclick="Viewer.addNag(1)"  title="Guter Zug">!</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(2)"  title="Fehler">?</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(3)"  title="Brillanter Zug">!!</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(4)"  title="Grober Fehler">??</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(5)"  title="Interessanter Zug">!?</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(6)"  title="Zweifelhafter Zug">?!</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(18)" title="Weiß steht besser">±</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(19)" title="Schwarz steht besser">∓</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(14)" title="Weiß steht klar besser">+−</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(15)" title="Schwarz steht klar besser">−+</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(10)" title="Ausgeglichen">=</button>
+                                        <button class="nag-btn" onclick="Viewer.addNag(13)" title="Unklare Stellung">∞</button>
+                                        <button class="nag-btn" onclick="Viewer.clearNag()"  title="Bewertung entfernen" style="color:#f87171">✕</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <small class="text-muted fw-semibold d-block mb-1">KOMMENTAR</small>
+                                    <div class="d-flex gap-2">
+                                        <textarea id="annotation-comment" class="form-control form-control-sm font-mono" rows="2" placeholder="Kommentar zum aktuellen Zug…"></textarea>
+                                        <button class="btn btn-sm btn-accent" onclick="Viewer.saveAnnotation()" title="Speichern">
+                                            <i class="bi bi-save"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                     <div class="card mt-3" id="v-notes-card" style="display:none">
-                        <div class="card-header"><small class="text-muted fw-semibold">NOTIZEN</small></div>
+                        <div class="card-header"><small class="fw-semibold" style="color:var(--muted)">NOTIZEN</small></div>
                         <div class="card-body py-2">
                             <p class="mb-0 small" style="white-space:pre-wrap" id="v-notes"></p>
                         </div>
@@ -1407,17 +1472,91 @@ document.getElementById('confirm-delete-btn').addEventListener('click', async ()
 });
 
 // ══════════════════════════════════════════════════════════
+// PGN TREE PARSER  (preserves comments, NAGs, variations)
+// ══════════════════════════════════════════════════════════
+
+// NAG number → display symbol
+const NAG_SYMBOLS = {
+    1:'!', 2:'?', 3:'!!', 4:'??', 5:'!?', 6:'?!',
+    10:'=', 13:'∞', 14:'+−', 15:'−+', 18:'±', 19:'∓',
+};
+
+/**
+ * Tokenise a PGN moves string (no headers) into a flat token array.
+ * Token types: 'move', 'nag', 'comment', 'open_var', 'close_var', 'result'
+ */
+function tokenisePGN(pgn) {
+    const tokens = [];
+    // Strip header tags if any leaked through
+    const src = pgn.replace(/\[[^\]]*\]/g, '').trim();
+    const re = /\{([^}]*)\}|\(|\)|(\$\d+)|([!?][!?]?)|(\d+\.+\s*)|(1-0|0-1|1\/2-1\/2|\*)|([A-Za-z][A-Za-z0-9\-+=#@]*[+#=!?]*)/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+        if (m[1] !== undefined)       tokens.push({ type:'comment', text: m[1].trim() });
+        else if (m[0] === '(')        tokens.push({ type:'open_var' });
+        else if (m[0] === ')')        tokens.push({ type:'close_var' });
+        else if (m[2])                tokens.push({ type:'nag', nag: parseInt(m[2].slice(1)) });
+        else if (m[3])                tokens.push({ type:'nag', nag: {'!':1,'?':2,'!!':3,'??':4,'!?':5,'?!':6}[m[3]] || 0 });
+        else if (m[4])                { /* move number — skip */ }
+        else if (m[5])                tokens.push({ type:'result', text: m[0] });
+        else if (m[6])                tokens.push({ type:'move', san: m[0].replace(/[!?]/g,'') });
+    }
+    return tokens;
+}
+
+/**
+ * Build a node tree from tokens.
+ * Each node: { san, nags:[], comment:'', variations:[[node,...]], plyIndex }
+ * plyIndex is the index in the main-line flat array (set during render).
+ */
+function buildTree(tokens) {
+    const root = [];        // main line nodes
+    const stack = [root];   // stack of node arrays (for variations)
+    let pending = null;     // node waiting for nags/comment
+
+    for (const tok of tokens) {
+        if (tok.type === 'move') {
+            pending = { san: tok.san, nags: [], comment: '', variations: [] };
+            stack[stack.length - 1].push(pending);
+        } else if (tok.type === 'nag') {
+            if (pending) pending.nags.push(tok.nag);
+        } else if (tok.type === 'comment') {
+            if (pending) pending.comment = tok.text;
+            else {
+                // Pre-move comment: attach as comment on a synthetic node
+                const dummy = { san: null, nags: [], comment: tok.text, variations: [] };
+                stack[stack.length - 1].push(dummy);
+                pending = dummy;
+            }
+        } else if (tok.type === 'open_var') {
+            const varLine = [];
+            if (pending) pending.variations.push(varLine);
+            stack.push(varLine);
+            pending = null;
+        } else if (tok.type === 'close_var') {
+            if (stack.length > 1) stack.pop();
+            // restore pending to last node of parent
+            const parent = stack[stack.length - 1];
+            pending = parent.length ? parent[parent.length - 1] : null;
+        }
+    }
+    return root;
+}
+
+// ══════════════════════════════════════════════════════════
 // VIEWER
 // ══════════════════════════════════════════════════════════
 const Viewer = {
-    board:       null,
-    chess:       null,
-    moves:       [],
-    idx:         -1,
-    autoTimer:   null,
-    currentId:   null,
-    currentGame: null,
-    orientation: 'white',
+    board:        null,
+    chess:        null,
+    flatMoves:    [],   // main-line verbose moves (for board navigation)
+    tree:         [],   // parsed PGN tree nodes
+    idx:          -1,
+    autoTimer:    null,
+    currentId:    null,
+    currentGame:  null,
+    orientation:  'white',
+    _hlSquares:   [],
 
     load(id) {
         const g = DB.get(id);
@@ -1425,53 +1564,57 @@ const Viewer = {
         this.currentId   = id;
         this.currentGame = g;
         this.stopAutoplay();
+        this._hideAnnotationPanel();
 
-        // Header
-        document.getElementById('v-title').textContent       = `${g.white || '?'} vs ${g.black || '?'}`;
-        document.getElementById('v-result-badge').innerHTML  = resultBadge(g.result);
-        document.getElementById('v-subtitle').textContent    =
+        document.getElementById('v-title').textContent      = `${g.white || '?'} vs ${g.black || '?'}`;
+        document.getElementById('v-result-badge').innerHTML = resultBadge(g.result);
+        document.getElementById('v-subtitle').textContent   =
             [g.event, g.site, fmtDate(g.date), g.round ? 'Runde ' + g.round : ''].filter(Boolean).join(' · ');
 
-        // Players
         document.getElementById('v-white-name').textContent = g.white || '?';
         document.getElementById('v-black-name').textContent = g.black || '?';
         document.getElementById('v-white-elo').textContent  = g.whiteElo ? 'Elo ' + g.whiteElo : '';
         document.getElementById('v-black-elo').textContent  = g.blackElo ? 'Elo ' + g.blackElo : '';
 
-        // Info table
         const rows = [
-            ['Turnier',       g.event],
-            ['Ort',           g.site],
-            ['Datum',         fmtDate(g.date)],
-            ['Runde',         g.round],
-            ['ECO',           g.eco],
-            ['Eröffnung',     g.opening],
-            ['Zeitkontrolle', g.timeControl],
-        ].filter(([,v]) => v);
+            ['Turnier','event'],['Ort','site'],['Datum','date'],
+            ['Runde','round'],['ECO','eco'],['Eröffnung','opening'],['Zeitkontrolle','timeControl']
+        ].map(([k,f]) => [k, f==='date' ? fmtDate(g[f]) : g[f]]).filter(([,v])=>v);
         document.getElementById('v-info').innerHTML = rows.map(([k,v]) =>
-            `<div class="row g-0 mb-1"><div class="col-5 text-muted small">${k}</div><div class="col-7 small fw-semibold">${esc(v)}</div></div>`
-        ).join('') || '<small class="text-muted">–</small>';
+            `<div class="row g-0 mb-1"><div class="col-5 small" style="color:var(--muted)">${k}</div><div class="col-7 small fw-semibold">${esc(v)}</div></div>`
+        ).join('') || '<small style="color:var(--muted)">–</small>';
 
-        // Notes
         const nc = document.getElementById('v-notes-card');
         if (g.notes) { nc.style.display = ''; document.getElementById('v-notes').textContent = g.notes; }
         else nc.style.display = 'none';
 
-        // Load PGN
+        // Parse PGN
         this.chess = new Chess();
-        if (g.pgn) { try { this.chess.load_pgn(g.pgn); } catch {} }
-        this.moves = this.chess.history({ verbose: true });
+        const pgn = g.pgn || '';
+        try { this.chess.load_pgn(pgn); } catch {}
+        this.flatMoves = this.chess.history({ verbose: true });
+
+        // Build annotation tree from the moves-only string
+        const movesOnly = this.chess.pgn().replace(/\[[^\]]*\]\s*/g,'').trim();
+        // Re-parse original pgn for comments/variations (chess.js strips them in pgn())
+        this.tree = buildTree(tokenisePGN(pgn));
+
+        // Assign plyIndex to main-line nodes
+        let ply = 0;
+        for (const node of this.tree) {
+            if (node.san) { node.plyIndex = ply; ply++; }
+            else           node.plyIndex = -1;
+        }
+
         this.chess.reset();
         this.idx = -1;
 
-        // Auto-orient: I (MY_NAME) am always at the bottom
         const iAmBlack = (g.black || '').trim().toLowerCase() === MY_NAME.toLowerCase();
         this.orientation = iAmBlack ? 'black' : 'white';
 
-        // Board
         if (!this.board) {
             this.board = Chessboard('viewer-board', {
-                position: 'start', pieceTheme: pieceTheme, orientation: this.orientation
+                position: 'start', pieceTheme, orientation: this.orientation
             });
         } else {
             this.board.position('start', false);
@@ -1481,60 +1624,127 @@ const Viewer = {
         this._renderMoveList();
         this._updateCounter();
         showView('viewer');
+        setTimeout(() => this.board && this.board.resize(), 60);
     },
 
+    // ── Render move list with comments, NAGs, variations ──
     _renderMoveList() {
         const el = document.getElementById('move-list');
-        if (!this.moves.length) { el.innerHTML = '<span class="text-muted small">Keine Züge vorhanden.</span>'; return; }
-        let html = '';
-        for (let i = 0; i < this.moves.length; i++) {
-            if (i % 2 === 0) html += `<span class="move-number">${Math.floor(i/2)+1}.</span>`;
-            html += `<button class="move-btn" id="mb-${i}" onclick="Viewer.goTo(${i})">${this.moves[i].san}</button> `;
-            if (i % 2 === 1) html += ' ';
-        }
-        if (this.currentGame?.result) html += `<span class="move-result">${this.currentGame.result}</span>`;
-        el.innerHTML = html;
+        if (!this.tree.length) { el.innerHTML = '<span style="color:var(--muted)">Keine Züge vorhanden.</span>'; return; }
+        el.innerHTML = this._renderLine(this.tree, false);
     },
 
-    _apply(upTo) {
+    _renderLine(nodes, isVariation) {
+        let html = '';
+        let moveCount = 0;
+        for (const node of nodes) {
+            if (!node.san) {
+                // comment-only node
+                if (node.comment) html += `<span class="pgn-comment">{ ${esc(node.comment)} }</span> `;
+                continue;
+            }
+            // Move number (show for white or after variation)
+            const ply = node.plyIndex !== undefined ? node.plyIndex : -1;
+            const isWhiteMove = (ply % 2 === 0);
+            if (isWhiteMove || moveCount === 0) {
+                const num = Math.floor(ply / 2) + 1;
+                html += `<span class="move-number">${num}${isWhiteMove ? '.' : '…'}</span>`;
+            }
+            // The move button (only clickable on main line)
+            if (!isVariation) {
+                html += `<button class="move-btn" id="mb-${ply}" onclick="Viewer.goTo(${ply})">${esc(node.san)}</button>`;
+            } else {
+                html += `<span class="move-btn" style="cursor:default">${esc(node.san)}</span>`;
+            }
+            // NAGs
+            for (const nag of node.nags) {
+                const sym = NAG_SYMBOLS[nag];
+                if (sym) html += `<span class="pgn-nag">${sym}</span>`;
+            }
+            // Comment
+            if (node.comment) html += ` <span class="pgn-comment">{ ${esc(node.comment)} }</span>`;
+            html += ' ';
+            // Variations
+            for (const varLine of node.variations) {
+                html += `<span class="pgn-variation">(${this._renderLine(varLine, true)})</span>`;
+            }
+            moveCount++;
+        }
+        return html;
+    },
+
+    // ── Board navigation ──
+    _applyUpTo(upTo) {
         this.chess.reset();
-        for (let i = 0; i <= upTo; i++) this.chess.move(this.moves[i].san);
+        for (let i = 0; i <= upTo; i++) this.chess.move(this.flatMoves[i].san);
+    },
+
+    _afterMove() {
+        this.board.position(this.chess.fen());
+        this._highlightLastMove();
+        this._updateCounter();
+        this._highlightActiveBtn();
     },
 
     goTo(i) {
-        this._apply(i); this.idx = i;
-        this.board.position(this.chess.fen());
-        this._updateCounter(); this._highlight();
+        this._applyUpTo(i);
+        this.idx = i;
+        this._afterMove();
+        this._loadAnnotationForCurrent();
     },
     goFirst() {
         this.chess.reset(); this.idx = -1;
         this.board.position('start', false);
-        this._updateCounter(); this._highlight();
+        this._clearHighlight();
+        this._updateCounter();
+        this._highlightActiveBtn();
+        this._loadAnnotationForCurrent();
     },
     goPrev() {
         if (this.idx < 0) return;
         this.idx--;
-        if (this.idx < 0) { this.chess.reset(); this.board.position('start', false); }
-        else { this._apply(this.idx); this.board.position(this.chess.fen()); }
-        this._updateCounter(); this._highlight();
+        if (this.idx < 0) { this.chess.reset(); this.board.position('start', false); this._clearHighlight(); }
+        else { this._applyUpTo(this.idx); this.board.position(this.chess.fen()); this._highlightLastMove(); }
+        this._updateCounter(); this._highlightActiveBtn();
+        this._loadAnnotationForCurrent();
     },
     goNext() {
-        if (this.idx >= this.moves.length - 1) return;
+        if (this.idx >= this.flatMoves.length - 1) return;
         this.idx++;
-        this.chess.move(this.moves[this.idx].san);
-        this.board.position(this.chess.fen());
-        this._updateCounter(); this._highlight();
+        this.chess.move(this.flatMoves[this.idx].san);
+        this._afterMove();
+        this._loadAnnotationForCurrent();
     },
     goLast() {
-        if (!this.moves.length) return;
-        this._apply(this.moves.length - 1);
-        this.idx = this.moves.length - 1;
-        this.board.position(this.chess.fen());
-        this._updateCounter(); this._highlight();
+        if (!this.flatMoves.length) return;
+        this._applyUpTo(this.flatMoves.length - 1);
+        this.idx = this.flatMoves.length - 1;
+        this._afterMove();
+        this._loadAnnotationForCurrent();
     },
 
-    _highlight() {
-        document.querySelectorAll('.move-btn').forEach(b => b.classList.remove('active'));
+    // ── Highlight last-moved squares ──
+    _clearHighlight() {
+        this._hlSquares.forEach(sq => {
+            const el = document.querySelector(`[data-square="${sq}"]`);
+            if (el) el.classList.remove('highlight-from','highlight-to');
+        });
+        this._hlSquares = [];
+    },
+    _highlightLastMove() {
+        this._clearHighlight();
+        const hist = this.chess.history({ verbose: true });
+        if (!hist.length) return;
+        const last = hist[hist.length - 1];
+        const fromEl = document.querySelector(`[data-square="${last.from}"]`);
+        const toEl   = document.querySelector(`[data-square="${last.to}"]`);
+        if (fromEl) { fromEl.classList.add('highlight-from'); this._hlSquares.push(last.from); }
+        if (toEl)   { toEl.classList.add('highlight-to');     this._hlSquares.push(last.to); }
+    },
+
+    // ── Move list active state ──
+    _highlightActiveBtn() {
+        document.querySelectorAll('#move-list .move-btn').forEach(b => b.classList.remove('active'));
         if (this.idx >= 0) {
             const btn = document.getElementById(`mb-${this.idx}`);
             if (btn) { btn.classList.add('active'); btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
@@ -1542,7 +1752,7 @@ const Viewer = {
     },
 
     _updateCounter() {
-        const cur = this.idx + 1, tot = this.moves.length;
+        const cur = this.idx + 1, tot = this.flatMoves.length;
         document.getElementById('move-counter').textContent =
             cur === 0 ? 'Startposition' : `Halbzug ${cur} / ${tot}  ·  Zug ${Math.ceil(cur/2)}`;
     },
@@ -1554,17 +1764,129 @@ const Viewer = {
 
     stopAutoplay() {
         if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; }
-        document.getElementById('autoplay-btn').innerHTML = '<i class="bi bi-play-fill"></i>';
+        const btn = document.getElementById('autoplay-btn');
+        if (btn) btn.innerHTML = '<i class="bi bi-play-fill"></i>';
     },
-
     toggleAutoplay() {
         if (this.autoTimer) { this.stopAutoplay(); return; }
         document.getElementById('autoplay-btn').innerHTML = '<i class="bi bi-pause-fill"></i>';
         this.autoTimer = setInterval(() => {
-            if (this.idx >= this.moves.length - 1) this.stopAutoplay();
+            if (this.idx >= this.flatMoves.length - 1) this.stopAutoplay();
             else this.goNext();
         }, 1000);
-    }
+    },
+
+    // ── Annotation panel ──
+    toggleAnnotationPanel() {
+        const panel = document.getElementById('annotation-panel');
+        const visible = panel.style.display !== 'none';
+        panel.style.display = visible ? 'none' : '';
+        if (!visible) this._loadAnnotationForCurrent();
+    },
+    _hideAnnotationPanel() {
+        document.getElementById('annotation-panel').style.display = 'none';
+    },
+
+    _getMainNode() {
+        if (this.idx < 0) return null;
+        return this.tree.find(n => n.plyIndex === this.idx) || null;
+    },
+
+    _loadAnnotationForCurrent() {
+        const panel = document.getElementById('annotation-panel');
+        if (panel.style.display === 'none') return;
+        const node = this._getMainNode();
+        // comment
+        document.getElementById('annotation-comment').value = node ? (node.comment || '') : '';
+        // NAG buttons
+        document.querySelectorAll('.nag-btn').forEach(b => b.classList.remove('active'));
+        if (node && node.nags.length) {
+            for (const nag of node.nags) {
+                const sym = NAG_SYMBOLS[nag];
+                if (sym) {
+                    document.querySelectorAll('.nag-btn').forEach(b => {
+                        if (b.textContent.trim() === sym) b.classList.add('active');
+                    });
+                }
+            }
+        }
+    },
+
+    addNag(nag) {
+        const node = this._getMainNode();
+        if (!node) return;
+        // Toggle: remove if same, else replace all with this one
+        if (node.nags.includes(nag)) { node.nags = []; }
+        else { node.nags = [nag]; }
+        this._loadAnnotationForCurrent();
+        this._renderMoveList();
+        this._highlightActiveBtn();
+    },
+    clearNag() {
+        const node = this._getMainNode();
+        if (!node) return;
+        node.nags = [];
+        this._loadAnnotationForCurrent();
+        this._renderMoveList();
+        this._highlightActiveBtn();
+    },
+
+    async saveAnnotation() {
+        const node = this._getMainNode();
+        if (!node) return;
+        node.comment = document.getElementById('annotation-comment').value.trim();
+        // Rebuild PGN from tree + existing headers
+        const newPgn = this._rebuildPGN();
+        const g = this.currentGame;
+        g.pgn = newPgn;
+        this._renderMoveList();
+        this._highlightActiveBtn();
+        try {
+            await DB.update(this.currentId, { pgn: newPgn });
+            showToast('Annotation gespeichert!');
+        } catch(e) {
+            showToast('Fehler: ' + e.message, 'danger');
+        }
+    },
+
+    // Serialize tree back to PGN moves string
+    _rebuildPGN() {
+        const g = this.currentGame;
+        const headers = [
+            ['Event', g.event||'?'], ['Site', g.site||'?'],
+            ['Date', g.date||'????.??.??'], ['Round', g.round||'?'],
+            ['White', g.white||'?'], ['Black', g.black||'?'],
+            ['Result', g.result||'*'], ['WhiteElo', g.whiteElo||''],
+            ['BlackElo', g.blackElo||''], ['ECO', g.eco||''],
+        ].filter(([,v])=>v).map(([k,v])=>`[${k} "${v}"]`).join('\n');
+
+        const moves = this._serializeLine(this.tree, 0);
+        return headers + '\n\n' + moves + ' ' + (g.result || '*');
+    },
+
+    _serializeLine(nodes, startPly) {
+        let out = '';
+        let ply = startPly;
+        for (const node of nodes) {
+            if (!node.san) {
+                if (node.comment) out += `{ ${node.comment} } `;
+                continue;
+            }
+            const isWhite = ply % 2 === 0;
+            if (isWhite) out += `${Math.floor(ply/2)+1}. `;
+            else if (out === '' || out.endsWith(') ')) out += `${Math.floor(ply/2)+1}... `;
+            out += node.san;
+            for (const nag of node.nags) out += ` $${nag}`;
+            if (node.comment) out += ` { ${node.comment} }`;
+            // Variations
+            for (const varLine of node.variations) {
+                out += ` (${this._serializeLine(varLine, ply)})`;
+            }
+            out += ' ';
+            ply++;
+        }
+        return out.trim();
+    },
 };
 
 function viewGame(id) {
