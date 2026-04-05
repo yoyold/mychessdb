@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schach PGN Datenbank</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        :root {
+            --bg:     #0d0d1a;
+            --card:   #161627;
+            --nav:    #1a1a2e;
+            --accent: #e94560;
+            --border: #252540;
+            --text:   #e0e0e0;
+            --muted:  #7a7a9a;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: system-ui, sans-serif; }
+
+        /* ── LOADING OVERLAY ─────────────────────────────── */
+        #loading-overlay {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,.65); backdrop-filter: blur(2px);
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        #loading-overlay.show { display: flex; }
+        #loading-msg { color: #ccc; margin-top: .75rem; font-size: .9rem; }
+
+        /* ── LOGIN PAGE ──────────────────────────────────── */
+        #page-login {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 1rem;
+        }
+        .login-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+            padding: 2.5rem 2rem; width: 100%; max-width: 440px;
+        }
+        .login-logo { font-size: 3rem; line-height: 1; margin-bottom: .5rem; }
+        .login-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+
+        /* ── NAVBAR ──────────────────────────────────────── */
+        .navbar { background: var(--nav) !important; border-bottom: 2px solid var(--accent); }
+        .navbar-brand { font-size: 1.3rem; font-weight: 700; color: #fff !important; }
+
+        /* ── CARDS ───────────────────────────────────────── */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+        .card-header { background: var(--nav); border-bottom: 1px solid var(--border); padding: .65rem 1rem; }
+        .card-header h5, .card-header h6 { margin: 0; }
+        .card-body { padding: 1rem; }
+
+        /* ── TABLE ───────────────────────────────────────── */
+        .table { color: var(--text); margin: 0; }
+        .table thead th {
+            background: #0a0a18; border-color: var(--border);
+            color: var(--muted); font-size: .75rem; text-transform: uppercase;
+            letter-spacing: .5px; white-space: nowrap; padding: .5rem .75rem;
+        }
+        .table tbody td { border-color: var(--border); vertical-align: middle; padding: .45rem .75rem; }
+        .table tbody tr:hover { background: rgba(233,69,96,.07); cursor: pointer; }
+
+        /* ── FORMS ───────────────────────────────────────── */
+        .form-control, .form-select {
+            background: #0a0a18; border-color: var(--border); color: var(--text);
+        }
+        .form-control:focus, .form-select:focus {
+            background: #0a0a18; border-color: var(--accent); color: var(--text);
+            box-shadow: 0 0 0 .18rem rgba(233,69,96,.22);
+        }
+        .form-control::placeholder { color: #404060; }
+        .form-label { color: #9090b0; font-size: .82rem; margin-bottom: 3px; }
+        select.form-select option { background: #1a1a2e; }
+
+        /* ── BUTTONS ─────────────────────────────────────── */
+        .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+        .btn-accent:hover { background: #c73652; border-color: #c73652; color: #fff; }
+        .btn-accent:disabled { opacity: .6; }
+        .btn-outline-secondary { border-color: var(--border); color: #aaa; }
+        .btn-outline-secondary:hover { background: var(--border); color: #fff; border-color: var(--border); }
+
+        /* ── STATS ───────────────────────────────────────── */
+        .stat-card {
+            background: linear-gradient(135deg, var(--nav), var(--card));
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 1rem; text-align: center;
+        }
+        .stat-number { font-size: 2rem; font-weight: 700; line-height: 1; }
+
+        /* ── VIEWER / MOVE LIST ──────────────────────────── */
+        #viewer-board, #input-board { width: 100%; }
+        .board-b72b1 { border: 2px solid #333 !important; border-radius: 4px; overflow: hidden; }
+        .move-list { font-family: 'Courier New', monospace; max-height: 430px; overflow-y: auto; line-height: 2; }
+        .move-btn {
+            background: none; border: none; color: var(--text);
+            padding: 1px 6px; cursor: pointer; border-radius: 4px;
+            font-family: inherit; font-size: .95rem; transition: background .12s;
+        }
+        .move-btn:hover { background: rgba(233,69,96,.25); }
+        .move-btn.active { background: var(--accent); color: #fff; }
+        .move-number { color: var(--muted); font-size: .82rem; margin-right: 2px; user-select: none; }
+        .move-result { color: var(--muted); margin-left: 4px; font-size: .88rem; }
+        .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 2px; }
+
+        /* highlight squares for last move */
+        .highlight-from { background: rgba(255,200,0,.35) !important; }
+        .highlight-to   { background: rgba(255,200,0,.55) !important; }
+
+        /* ── INPUT MODE ──────────────────────────────────── */
+        .input-move-display {
+            font-family: 'Courier New', monospace; font-size: .88rem;
+            color: #b0b0d0; min-height: 2rem; line-height: 1.8;
+        }
+
+        /* ── MISC ────────────────────────────────────────── */
+        .view { display: none; }
+        .view.active { display: block; }
+        .font-mono { font-family: 'Courier New', monospace; }
+        code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 3px; font-size: .82rem; color: #aef; }
+        .empty-state { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+        .empty-state i { font-size: 3rem; display: block; margin-bottom: 1rem; opacity: .35; }
+        .text-accent { color: var(--accent); }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: var(--nav); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* nav tabs in dark theme */
+        .nav-tabs { border-color: var(--border); }
+        .nav-tabs .nav-link { color: var(--muted); border-color: transparent; }
+        .nav-tabs .nav-link:hover { color: var(--text); border-color: transparent; }
+        .nav-tabs .nav-link.active { background: var(--card); border-color: var(--border) var(--border) var(--card); color: var(--text); }
+        .tab-content { border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; background: var(--card); }
+        .tab-pane { padding: 1rem; }
+
+        /* accordion in login */
+        .accordion-button { background: var(--border); color: var(--text); font-size: .88rem; padding: .6rem .9rem; }
+        .accordion-button:not(.collapsed) { background: var(--nav); color: var(--text); box-shadow: none; }
+        .accordion-button::after { filter: invert(1) brightness(.7); }
+        .accordion-body { background: var(--card); border-top: 1px solid var(--border); }
+        .accordion-item { background: var(--card); border-color: var(--border); }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- LOADING OVERLAY                                        -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="loading-overlay">
+    <div class="spinner-border text-light" role="status" style="width:2.5rem;height:2.5rem"></div>
+    <div id="loading-msg">Laden…</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- PAGE: LOGIN                                            -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="page-login">
+    <div class="login-card">
+        <div class="login-logo">♔</div>
+        <h2>PGN Datenbank</h2>
+        <p class="text-muted small mb-3">Verschlüsselt · GitHub-synchronisiert</p>
+
+        <div id="login-error" class="alert alert-danger py-2 small mb-3" style="display:none"></div>
+        <div id="login-info"  class="alert alert-info  py-2 small mb-3" style="display:none"></div>
+
+        <div class="mb-3">
+            <label class="form-label">Passwort</label>
+            <input type="password" id="login-pw" class="form-control" placeholder="Datenbankpasswort" autocomplete="current-password">
+        </div>
+        <button id="login-btn" class="btn btn-accent w-100 mb-3">
+            <i class="bi bi-unlock-fill me-1"></i>Entsperren
+        </button>
+
+        <!-- GitHub settings accordion -->
+        <div class="accordion" id="gh-acc">
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#gh-settings-panel">
+                        <i class="bi bi-github me-2"></i>GitHub Einstellungen
+                    </button>
+                </h2>
+                <div id="gh-settings-panel" class="accordion-collapse collapse" data-bs-parent="#gh-acc">
+                    <div class="accordion-body">
+                        <p class="small text-muted mb-2">
+                            Token benötigt <code>Contents: Read &amp; Write</code> (Fine-grained) oder <code>repo</code> (Classic).
+                            Daten werden AES-256 verschlüsselt gespeichert – auch in öffentlichen Repos sicher.
+                        </p>
+                        <div class="mb-2">
+                            <label class="form-label">Personal Access Token</label>
+                            <input type="password" id="s-token" class="form-control form-control-sm" placeholder="ghp_...">
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label">GitHub Username</label>
+                                <input id="s-owner" class="form-control form-control-sm" placeholder="username">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Repository</label>
+                                <input id="s-repo" class="form-control form-control-sm" placeholder="mychessdb">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Datei-Pfad im Repo</label>
+                            <input id="s-path" class="form-control form-control-sm" placeholder="chess-db/games.enc">
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="saveSettings()">
+                                <i class="bi bi-save me-1"></i>Speichern
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="testConnection()">
+                                <i class="bi bi-wifi me-1"></i>Verbindung testen
+                            </button>
+                        </div>
+                        <div id="test-result" class="mt-2 small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- PAGE: APP                                              -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="page-app" style="display:none">
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <span class="navbar-brand"><span class="text-warning me-1">♔</span>PGN Datenbank</span>
+            <div class="d-flex gap-2 ms-auto flex-wrap">
+                <button class="btn btn-sm btn-outline-secondary" onclick="showView('list')">
+                    <i class="bi bi-collection-fill me-1"></i>Partien
+                </button>
+                <button class="btn btn-sm btn-accent" onclick="openNewForm()">
+                    <i class="bi bi-plus-circle me-1"></i>Neu
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal" title="Einstellungen">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="logout()" title="Abmelden">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-3 px-3" style="max-width:1400px;margin:auto">
+
+        <!-- ═══════════ VIEW: LIST ═══════════ -->
+        <div id="view-list" class="view active">
+            <div class="row g-2 mb-3" id="stats-row"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-12 col-md-4">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-transparent border-secondary text-muted"><i class="bi bi-search"></i></span>
+                                <input type="text" id="search-input" class="form-control form-control-sm" placeholder="Spieler, Turnier, ECO…">
+                                <button class="btn btn-sm btn-outline-secondary" id="clear-search" onclick="document.getElementById('search-input').value='';renderList()" style="display:none" title="Löschen"><i class="bi bi-x"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <select id="filter-result" class="form-select form-select-sm">
+                                <option value="">Alle Ergebnisse</option>
+                                <option value="1-0">1-0 Weiß</option>
+                                <option value="0-1">0-1 Schwarz</option>
+                                <option value="1/2-1/2">½-½ Remis</option>
+                                <option value="*">* Unbekannt</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <select id="sort-by" class="form-select form-select-sm">
+                                <option value="createdAt-desc">Neueste zuerst</option>
+                                <option value="createdAt-asc">Älteste zuerst</option>
+                                <option value="date-desc">Datum (neu)</option>
+                                <option value="date-asc">Datum (alt)</option>
+                                <option value="white-asc">Weiß A–Z</option>
+                                <option value="black-asc">Schwarz A–Z</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2 ms-md-auto">
+                            <button class="btn btn-sm btn-outline-secondary w-100" onclick="exportJSON()">
+                                <i class="bi bi-download me-1"></i>Export JSON
+                            </button>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="btn btn-sm btn-outline-secondary w-100 mb-0">
+                                <i class="bi bi-upload me-1"></i>Import JSON
+                                <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(this)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="games-table">
+                        <thead>
+                            <tr>
+                                <th>Weiß</th><th>Elo</th>
+                                <th>Schwarz</th><th>Elo</th>
+                                <th>Ergebnis</th><th>Datum</th>
+                                <th>Turnier</th><th>ECO</th><th>Züge</th>
+                                <th style="width:105px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="games-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="empty-state" style="display:none">
+                    <i class="bi bi-shield-check"></i>
+                    <p class="fw-semibold mb-1">Keine Partien vorhanden</p>
+                    <small>Füge deine erste Partie hinzu.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ VIEW: FORM ═══════════ -->
+        <div id="view-form" class="view">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 id="form-title">Neue Partie</h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="showView('list')"><i class="bi bi-arrow-left me-1"></i>Zurück</button>
+                </div>
+                <div class="card-body">
+
+                    <!-- Quick PGN import -->
+                    <div class="card mb-4" style="background:#08080f;border-color:#1e1e30">
+                        <div class="card-body py-2">
+                            <label class="form-label fw-semibold"><i class="bi bi-magic me-1 text-warning"></i>Vollständige PGN einfügen &amp; automatisch parsen</label>
+                            <textarea id="pgn-raw" class="form-control font-mono form-control-sm" rows="2"
+                                placeholder='[Event "Turnier"][White "Müller"][Black "Schmidt"]&#10;1. e4 e5 2. Nf3 *'></textarea>
+                            <button type="button" class="btn btn-sm btn-outline-warning mt-2" onclick="parsePGN()">
+                                <i class="bi bi-magic me-1"></i>Felder befüllen
+                            </button>
+                        </div>
+                    </div>
+
+                    <form id="game-form" novalidate>
+                        <input type="hidden" id="game-id">
+
+                        <!-- Players & metadata -->
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Weiß *</label>
+                                <input type="text" id="f-white" class="form-control form-control-sm" placeholder="Nachname, Vorname" required>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label">Elo Weiß</label>
+                                <input type="number" id="f-white-elo" class="form-control form-control-sm" placeholder="–" min="100" max="3300">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Schwarz *</label>
+                                <input type="text" id="f-black" class="form-control form-control-sm" placeholder="Nachname, Vorname" required>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label">Elo Schwarz</label>
+                                <input type="number" id="f-black-elo" class="form-control form-control-sm" placeholder="–" min="100" max="3300">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6 col-md-2">
+                                <label class="form-label">Ergebnis *</label>
+                                <select id="f-result" class="form-select form-select-sm" required>
+                                    <option value="1-0">1-0</option>
+                                    <option value="0-1">0-1</option>
+                                    <option value="1/2-1/2">½-½</option>
+                                    <option value="*">*</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label">Datum</label>
+                                <input type="date" id="f-date" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-4 col-md-1">
+                                <label class="form-label">Runde</label>
+                                <input type="text" id="f-round" class="form-control form-control-sm" placeholder="1">
+                            </div>
+                            <div class="col-4 col-md-2">
+                                <label class="form-label">ECO</label>
+                                <input type="text" id="f-eco" class="form-control form-control-sm" placeholder="B20" maxlength="5">
+                            </div>
+                            <div class="col-4 col-md-2">
+                                <label class="form-label">Zeitkontrolle</label>
+                                <input type="text" id="f-time-control" class="form-control form-control-sm" placeholder="90+30">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label">Turnier / Event</label>
+                                <input type="text" id="f-event" class="form-control form-control-sm" placeholder="Stadtmeisterschaft 2024">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Ort</label>
+                                <input type="text" id="f-site" class="form-control form-control-sm" placeholder="Berlin, Deutschland">
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Eröffnung</label>
+                                <input type="text" id="f-opening" class="form-control form-control-sm" placeholder="Sizilianisch">
+                            </div>
+                        </div>
+
+                        <!-- Move entry tabs -->
+                        <label class="form-label fw-semibold mb-1">Züge eingeben</label>
+                        <ul class="nav nav-tabs" id="move-input-tabs">
+                            <li class="nav-item">
+                                <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#tab-pgn-text">
+                                    <i class="bi bi-textarea-t me-1"></i>PGN-Text
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" type="button" id="board-tab-btn" data-bs-toggle="tab" data-bs-target="#tab-board-input">
+                                    <i class="bi bi-grid-3x3 me-1"></i>Brett-Eingabe
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content">
+                            <!-- Tab: PGN Text -->
+                            <div class="tab-pane show active" id="tab-pgn-text">
+                                <textarea id="f-pgn" class="form-control font-mono" rows="6"
+                                    placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *" required></textarea>
+                                <div class="d-flex align-items-center gap-3 mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-info" onclick="validatePGN()">
+                                        <i class="bi bi-check-circle me-1"></i>Validieren
+                                    </button>
+                                    <span id="pgn-val-msg" class="small"></span>
+                                </div>
+                            </div>
+                            <!-- Tab: Board Input -->
+                            <div class="tab-pane" id="tab-board-input">
+                                <div class="row g-3 mt-0">
+                                    <div class="col-12 col-md-5 col-lg-4">
+                                        <div id="input-board"></div>
+                                        <div class="d-flex justify-content-center gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="BoardInput.undo()" title="Letzten Zug rückgängig">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="BoardInput.reset()" title="Zurücksetzen">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="BoardInput.flip()" title="Brett drehen">
+                                                <i class="bi bi-symmetry-vertical"></i>
+                                            </button>
+                                        </div>
+                                        <div class="mt-2 text-center">
+                                            <small id="input-status" class="text-muted">Startposition</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-7 col-lg-8">
+                                        <div class="card h-100" style="min-height:200px">
+                                            <div class="card-header">
+                                                <small class="text-muted">Eingegebene Züge</small>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="input-move-list" class="input-move-display"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Bauernumwandlung: automatisch zur Dame. Für andere Figur bitte im PGN-Text-Tab anpassen.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mt-3 mb-3">
+                            <label class="form-label">Notizen</label>
+                            <textarea id="f-notes" class="form-control" rows="2" placeholder="Persönliche Anmerkungen…"></textarea>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" id="save-btn" class="btn btn-accent px-4">
+                                <i class="bi bi-save me-1"></i>Speichern
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="showView('list')">Abbrechen</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ VIEW: VIEWER ═══════════ -->
+        <div id="view-viewer" class="view">
+
+            <div class="card mb-3">
+                <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+                    <span class="fw-bold" id="v-title"></span>
+                    <span id="v-result-badge"></span>
+                    <span class="text-muted small" id="v-subtitle"></span>
+                    <div class="ms-auto d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editCurrentGame()"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="exportPGN()"><i class="bi bi-filetype-txt me-1"></i>PGN</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="showView('list')"><i class="bi bi-arrow-left me-1"></i>Zurück</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-lg-5 col-xl-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <div class="player-bar mb-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="width:13px;height:13px;background:#1a1a1a;border:2px solid #666;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold small" id="v-black-name"></span>
+                                </div>
+                                <span class="text-muted small" id="v-black-elo"></span>
+                            </div>
+                            <div id="viewer-board"></div>
+                            <div class="player-bar mt-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="width:13px;height:13px;background:#f0d9b5;border:2px solid #666;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold small" id="v-white-name"></span>
+                                </div>
+                                <span class="text-muted small" id="v-white-elo"></span>
+                            </div>
+
+                            <!-- Controls -->
+                            <div class="d-flex justify-content-center gap-1 mt-3">
+                                <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goFirst()" title="Anfang (Home)"><i class="bi bi-skip-start-fill"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goPrev()"  title="Zurück (←)"><i class="bi bi-caret-left-fill"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary px-3" id="autoplay-btn" onclick="Viewer.toggleAutoplay()" title="Abspielen (Leertaste)">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goNext()"  title="Vor (→)"><i class="bi bi-caret-right-fill"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary px-2" onclick="Viewer.goLast()"  title="Ende (End)"><i class="bi bi-skip-end-fill"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary px-2 ms-1" onclick="Viewer.flip()" title="Drehen (F)"><i class="bi bi-arrow-repeat"></i></button>
+                            </div>
+                            <div class="text-center mt-2">
+                                <small class="text-muted" id="move-counter">–</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header"><small class="text-muted fw-semibold">PARTIE-INFO</small></div>
+                        <div class="card-body py-2" id="v-info"></div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-7 col-xl-8">
+                    <div class="card">
+                        <div class="card-header"><small class="text-muted fw-semibold">ZUGLISTE</small></div>
+                        <div class="card-body p-3">
+                            <div id="move-list" class="move-list"></div>
+                        </div>
+                    </div>
+                    <div class="card mt-3" id="v-notes-card" style="display:none">
+                        <div class="card-header"><small class="text-muted fw-semibold">NOTIZEN</small></div>
+                        <div class="card-body py-2">
+                            <p class="mb-0 small" style="white-space:pre-wrap" id="v-notes"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /container -->
+</div><!-- /page-app -->
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODALS                                                 -->
+<!-- ══════════════════════════════════════════════════════ -->
+
+<!-- Delete -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="background:var(--card);border-color:var(--border)">
+            <div class="modal-header border-secondary">
+                <h6 class="modal-title text-danger"><i class="bi bi-trash me-2"></i>Partie löschen?</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body"><p class="small text-muted mb-0" id="delete-label"></p></div>
+            <div class="modal-footer border-secondary">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button class="btn btn-sm btn-danger" id="confirm-delete-btn">Löschen &amp; Speichern</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:var(--card);border-color:var(--border)">
+            <div class="modal-header border-secondary">
+                <h6 class="modal-title"><i class="bi bi-gear me-2"></i>Einstellungen</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-0" id="settings-tabs">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#stab-github" type="button">GitHub</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stab-pw" type="button">Passwort ändern</button></li>
+                </ul>
+                <div class="tab-content">
+                    <!-- GitHub config tab -->
+                    <div class="tab-pane show active" id="stab-github">
+                        <div class="mb-2">
+                            <label class="form-label">Personal Access Token</label>
+                            <input type="password" id="ms-token" class="form-control form-control-sm" placeholder="ghp_...">
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label">Username</label>
+                                <input id="ms-owner" class="form-control form-control-sm" placeholder="username">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Repository</label>
+                                <input id="ms-repo" class="form-control form-control-sm" placeholder="mychessdb">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Datei-Pfad</label>
+                            <input id="ms-path" class="form-control form-control-sm" placeholder="chess-db/games.enc">
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="saveSettingsFromModal()"><i class="bi bi-save me-1"></i>Speichern</button>
+                            <button class="btn btn-sm btn-outline-info" onclick="testConnectionModal()"><i class="bi bi-wifi me-1"></i>Testen</button>
+                        </div>
+                        <div id="modal-test-result" class="mt-2 small"></div>
+                    </div>
+                    <!-- Change password tab -->
+                    <div class="tab-pane" id="stab-pw">
+                        <div class="mb-2">
+                            <label class="form-label">Aktuelles Passwort</label>
+                            <input type="password" id="pw-old" class="form-control form-control-sm" autocomplete="current-password">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Neues Passwort</label>
+                            <input type="password" id="pw-new" class="form-control form-control-sm" autocomplete="new-password">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Passwort bestätigen</label>
+                            <input type="password" id="pw-confirm" class="form-control form-control-sm" autocomplete="new-password">
+                        </div>
+                        <button class="btn btn-sm btn-accent" onclick="changePassword()">
+                            <i class="bi bi-shield-lock me-1"></i>Passwort ändern &amp; neu verschlüsseln
+                        </button>
+                        <div id="pw-change-msg" class="mt-2 small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9000">
+    <div id="toast" class="toast align-items-center border-0" role="alert">
+        <div class="d-flex">
+            <div class="toast-body fw-semibold" id="toast-body"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- SCRIPTS                                               -->
+<!-- ══════════════════════════════════════════════════════ -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════
+// UTILITY HELPERS
+// ══════════════════════════════════════════════════════════
+const PIECE_THEME = 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/src/img/chesspieces/wikipedia/{piece}.png';
+const SETTINGS_KEY = 'chess_settings';
+
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function b64(u8) {
+    let s = '';
+    for (const b of u8) s += String.fromCharCode(b);
+    return btoa(s);
+}
+
+function unb64(s) {
+    return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function resultBadge(r) {
+    const map = { '1-0': 'success', '0-1': 'danger', '1/2-1/2': 'warning text-dark', '*': 'secondary' };
+    const lbl = r === '1/2-1/2' ? '½-½' : (r || '*');
+    return `<span class="badge bg-${map[r] || 'secondary'}">${lbl}</span>`;
+}
+
+function fmtDate(d) {
+    if (!d) return '';
+    try { return new Date(d.replace(/\./g, '-')).toLocaleDateString('de-DE'); } catch { return d; }
+}
+
+function showToast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.className = `toast align-items-center border-0 text-white bg-${type}`;
+    document.getElementById('toast-body').textContent = msg;
+    bootstrap.Toast.getOrCreateInstance(el, { delay: type === 'danger' ? 6000 : 3000 }).show();
+}
+
+function pgnPlyCount(pgn) {
+    if (!pgn) return '?';
+    try { const c = new Chess(); c.load_pgn(pgn); return c.history().length; } catch { return '?'; }
+}
+
+// Loading overlay
+function loading(show, msg = 'Laden…') {
+    const el = document.getElementById('loading-overlay');
+    if (show) { document.getElementById('loading-msg').textContent = msg; el.classList.add('show'); }
+    else       { el.classList.remove('show'); }
+}
+
+// ══════════════════════════════════════════════════════════
+// CRYPTO  (AES-256-GCM + PBKDF2)
+// ══════════════════════════════════════════════════════════
+const Crypto = {
+    _enc: new TextEncoder(),
+    _dec: new TextDecoder(),
+
+    async deriveKey(password, salt) {
+        const raw = await crypto.subtle.importKey(
+            'raw', this._enc.encode(password), 'PBKDF2', false, ['deriveKey']
+        );
+        return crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+            raw,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+    },
+
+    // Encrypt with existing key (after login) — reuses salt, generates new IV
+    async encryptWithKey(data, key, salt) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv }, key,
+            this._enc.encode(JSON.stringify(data))
+        );
+        return JSON.stringify({ v: 1, s: b64(salt), i: b64(iv), d: b64(new Uint8Array(ct)) });
+    },
+
+    // First encryption — generates new salt & key
+    async encrypt(data, password) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const key  = await this.deriveKey(password, salt);
+        const payload = await this.encryptWithKey(data, key, salt);
+        return { key, salt, payload };
+    },
+
+    // Decrypt — returns { key, salt, data }
+    async decrypt(jsonStr, password) {
+        const { s, i, d } = JSON.parse(jsonStr);
+        const salt = unb64(s);
+        const key  = await this.deriveKey(password, salt);
+        const pt   = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: unb64(i) }, key, unb64(d)
+        );
+        return { key, salt, data: JSON.parse(this._dec.decode(pt)) };
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+// GITHUB API
+// ══════════════════════════════════════════════════════════
+function getSettings() {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+}
+
+function saveSettingsObj(obj) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj));
+}
+
+const GitHub = {
+    _h() {
+        const { ghToken } = getSettings();
+        return { Authorization: `token ${ghToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+    },
+
+    _url() {
+        const { ghOwner, ghRepo, ghPath } = getSettings();
+        if (!ghOwner || !ghRepo || !ghPath) throw new Error('GitHub Einstellungen unvollständig. Bitte konfigurieren.');
+        return `https://api.github.com/repos/${ghOwner}/${ghRepo}/contents/${ghPath}`;
+    },
+
+    async readFile() {
+        const r = await fetch(this._url(), { headers: this._h() });
+        if (r.status === 404) return null;
+        if (r.status === 401) throw new Error('GitHub Token ungültig oder abgelaufen.');
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(`GitHub Fehler ${r.status}: ${e.message || ''}`); }
+        const j = await r.json();
+        return { content: atob(j.content.replace(/\n/g, '')), sha: j.sha };
+    },
+
+    async writeFile(content, sha) {
+        const body = {
+            message: `chess-db ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
+            content: btoa(content),
+            ...(sha ? { sha } : {})
+        };
+        const r = await fetch(this._url(), { method: 'PUT', headers: this._h(), body: JSON.stringify(body) });
+        if (r.status === 401) throw new Error('GitHub Token ungültig.');
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(`GitHub Schreibfehler ${r.status}: ${e.message || ''}`); }
+        const j = await r.json();
+        return j.content.sha;
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+// SESSION STATE  (in-memory only, never persisted)
+// ══════════════════════════════════════════════════════════
+const S = {
+    password: null,
+    key:  null,
+    salt: null,
+    sha:  null,
+    games: []
+};
+
+// ══════════════════════════════════════════════════════════
+// DATA OPERATIONS  (in-memory + GitHub sync)
+// ══════════════════════════════════════════════════════════
+async function syncSave(loadingMsg = 'Speichere…') {
+    loading(true, loadingMsg);
+    try {
+        // Always re-fetch SHA before writing to prevent conflicts
+        const current = await GitHub.readFile();
+        S.sha = current ? current.sha : null;
+        const payload = await Crypto.encryptWithKey(S.games, S.key, S.salt);
+        S.sha = await GitHub.writeFile(payload, S.sha);
+    } finally {
+        loading(false);
+    }
+}
+
+const DB = {
+    all()          { return [...S.games]; },
+    get(id)        { return S.games.find(g => g.id === id); },
+    async add(game) {
+        game.id = uid(); game.createdAt = new Date().toISOString();
+        S.games.push(game);
+        await syncSave('Partie speichern…');
+    },
+    async update(id, delta) {
+        const i = S.games.findIndex(g => g.id === id);
+        if (i > -1) S.games[i] = { ...S.games[i], ...delta, updatedAt: new Date().toISOString() };
+        await syncSave('Partie aktualisieren…');
+    },
+    async delete(id) {
+        S.games = S.games.filter(g => g.id !== id);
+        await syncSave('Partie löschen…');
+    },
+    async replaceAll(arr) {
+        S.games = arr;
+        await syncSave('Importiere Daten…');
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════════════
+async function login() {
+    const pw = document.getElementById('login-pw').value.trim();
+    const errEl = document.getElementById('login-error');
+    const infoEl = document.getElementById('login-info');
+    errEl.style.display = 'none';
+    infoEl.style.display = 'none';
+
+    if (!pw) { errEl.textContent = 'Bitte Passwort eingeben.'; errEl.style.display = ''; return; }
+
+    const cfg = getSettings();
+    if (!cfg.ghToken || !cfg.ghOwner || !cfg.ghRepo || !cfg.ghPath) {
+        errEl.textContent = 'GitHub Einstellungen nicht vollständig. Bitte ausfüllen und speichern.';
+        errEl.style.display = '';
+        // Auto-expand settings
+        const el = document.getElementById('gh-settings-panel');
+        if (!el.classList.contains('show')) bootstrap.Collapse.getOrCreateInstance(el).show();
+        return;
+    }
+
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Verbinden…';
+    loading(true, 'Daten laden und entschlüsseln…');
+
+    try {
+        const file = await GitHub.readFile();
+        if (file) {
+            // Decrypt existing data
+            const result = await Crypto.decrypt(file.content, pw);
+            S.key  = result.key;
+            S.salt = result.salt;
+            S.sha  = file.sha;
+            S.games = Array.isArray(result.data) ? result.data : [];
+        } else {
+            // First time — empty database
+            const result = await Crypto.encrypt([], pw);
+            S.key  = result.key;
+            S.salt = result.salt;
+            S.sha  = null;
+            S.games = [];
+            infoEl.textContent = 'Neue Datenbank wird erstellt. Das Passwort wird für die Verschlüsselung verwendet.';
+            infoEl.style.display = '';
+        }
+        S.password = pw;
+        loading(false);
+        document.getElementById('page-login').style.display = 'none';
+        document.getElementById('page-app').style.display = '';
+        showView('list');
+    } catch (e) {
+        loading(false);
+        if (e instanceof DOMException || e.name === 'OperationError') {
+            errEl.textContent = 'Falsches Passwort.';
+        } else {
+            errEl.textContent = e.message;
+        }
+        errEl.style.display = '';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entsperren';
+    }
+}
+
+function logout() {
+    S.password = null; S.key = null; S.salt = null; S.sha = null; S.games = [];
+    document.getElementById('page-app').style.display = 'none';
+    document.getElementById('page-login').style.display = '';
+    document.getElementById('login-pw').value = '';
+    document.getElementById('login-error').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════
+function _readSettingsFromPanel(prefix) {
+    return {
+        ghToken: document.getElementById(prefix + 'token').value.trim(),
+        ghOwner: document.getElementById(prefix + 'owner').value.trim(),
+        ghRepo:  document.getElementById(prefix + 'repo').value.trim(),
+        ghPath:  document.getElementById(prefix + 'path').value.trim() || 'chess-db/games.enc',
+    };
+}
+
+function saveSettings() {
+    saveSettingsObj(_readSettingsFromPanel('s-'));
+    showToast('GitHub Einstellungen gespeichert!');
+}
+
+function saveSettingsFromModal() {
+    saveSettingsObj(_readSettingsFromPanel('ms-'));
+    showToast('GitHub Einstellungen gespeichert!');
+}
+
+async function _testConn(resultElId) {
+    const el = document.getElementById(resultElId);
+    el.innerHTML = '<span class="text-muted">Verbinde…</span>';
+    try {
+        const file = await GitHub.readFile();
+        el.innerHTML = file
+            ? '<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Verbindung erfolgreich. Datei gefunden.</span>'
+            : '<span class="text-info"><i class="bi bi-info-circle me-1"></i>Verbindung OK. Datei noch nicht vorhanden (wird beim ersten Speichern erstellt).</span>';
+    } catch (e) {
+        el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${esc(e.message)}</span>`;
+    }
+}
+
+function testConnection() { saveSettings(); _testConn('test-result'); }
+function testConnectionModal() { saveSettingsFromModal(); _testConn('modal-test-result'); }
+
+async function changePassword() {
+    const oldPw = document.getElementById('pw-old').value;
+    const newPw = document.getElementById('pw-new').value;
+    const conf  = document.getElementById('pw-confirm').value;
+    const msgEl = document.getElementById('pw-change-msg');
+    msgEl.innerHTML = '';
+
+    if (oldPw !== S.password) { msgEl.innerHTML = '<span class="text-danger">Altes Passwort falsch.</span>'; return; }
+    if (!newPw) { msgEl.innerHTML = '<span class="text-danger">Bitte neues Passwort eingeben.</span>'; return; }
+    if (newPw !== conf) { msgEl.innerHTML = '<span class="text-danger">Passwörter stimmen nicht überein.</span>'; return; }
+
+    loading(true, 'Passwort ändern und Daten neu verschlüsseln…');
+    try {
+        const newSalt = crypto.getRandomValues(new Uint8Array(16));
+        const newKey  = await Crypto.deriveKey(newPw, newSalt);
+        S.password = newPw; S.key = newKey; S.salt = newSalt;
+        await syncSave('Daten neu verschlüsseln…');
+        msgEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Passwort erfolgreich geändert!</span>';
+        document.getElementById('pw-old').value = '';
+        document.getElementById('pw-new').value = '';
+        document.getElementById('pw-confirm').value = '';
+    } catch (e) {
+        msgEl.innerHTML = `<span class="text-danger">${esc(e.message)}</span>`;
+        // Restore old password on error
+        // (key/salt may be in inconsistent state — advise reload)
+        msgEl.innerHTML += '<br><small class="text-muted">Bitte Seite neu laden.</small>';
+    } finally {
+        loading(false);
+    }
+}
+
+// Prefill settings modal when opened
+document.getElementById('settingsModal').addEventListener('show.bs.modal', () => {
+    const s = getSettings();
+    document.getElementById('ms-token').value = s.ghToken || '';
+    document.getElementById('ms-owner').value = s.ghOwner || '';
+    document.getElementById('ms-repo').value  = s.ghRepo  || '';
+    document.getElementById('ms-path').value  = s.ghPath  || '';
+    document.getElementById('modal-test-result').innerHTML = '';
+    document.getElementById('pw-change-msg').innerHTML = '';
+});
+
+// ══════════════════════════════════════════════════════════
+// VIEW MANAGEMENT
+// ══════════════════════════════════════════════════════════
+function showView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + name).classList.add('active');
+    if (name === 'list') renderList();
+    if (name === 'viewer') setTimeout(() => { if (Viewer.board) Viewer.board.resize(); }, 50);
+}
+
+// ══════════════════════════════════════════════════════════
+// GAME LIST
+// ══════════════════════════════════════════════════════════
+function renderStats(games) {
+    const w = games.filter(g => g.result === '1-0').length;
+    const d = games.filter(g => g.result === '1/2-1/2').length;
+    const l = games.filter(g => g.result === '0-1').length;
+    document.getElementById('stats-row').innerHTML = [
+        [games.length, 'Partien gesamt', 'var(--text)'],
+        [w, 'Weiß gewinnt',    '#4ade80'],
+        [d, 'Remis',           '#facc15'],
+        [l, 'Schwarz gewinnt', '#f87171'],
+    ].map(([n, label, color]) => `
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-number" style="color:${color}">${n}</div>
+                <div class="small text-muted mt-1">${label}</div>
+            </div>
+        </div>`).join('');
+}
+
+function renderList() {
+    const search  = document.getElementById('search-input').value.toLowerCase();
+    const filterR = document.getElementById('filter-result').value;
+    const sortBy  = document.getElementById('sort-by').value;
+
+    document.getElementById('clear-search').style.display = search ? '' : 'none';
+
+    let games = DB.all();
+    renderStats(games);
+
+    if (search) games = games.filter(g =>
+        [g.white, g.black, g.event, g.site, g.eco, g.opening].some(v => (v || '').toLowerCase().includes(search))
+    );
+    if (filterR) games = games.filter(g => g.result === filterR);
+
+    const [field, dir] = sortBy.split('-');
+    games.sort((a, b) => {
+        let va = a[field] ?? '', vb = b[field] ?? '';
+        if (dir === 'desc') [va, vb] = [vb, va];
+        return va < vb ? -1 : va > vb ? 1 : 0;
+    });
+
+    const tbody = document.getElementById('games-tbody');
+    const empty = document.getElementById('empty-state');
+    const table = document.getElementById('games-table');
+
+    if (!games.length) { tbody.innerHTML = ''; table.style.display = 'none'; empty.style.display = ''; return; }
+    table.style.display = ''; empty.style.display = 'none';
+
+    tbody.innerHTML = games.map(g => `
+        <tr onclick="viewGame('${g.id}')">
+            <td class="fw-semibold">${esc(g.white || '?')}</td>
+            <td class="text-muted small">${g.whiteElo || '–'}</td>
+            <td class="fw-semibold">${esc(g.black || '?')}</td>
+            <td class="text-muted small">${g.blackElo || '–'}</td>
+            <td>${resultBadge(g.result)}</td>
+            <td class="small text-muted">${fmtDate(g.date)}</td>
+            <td class="small text-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.event || '')}</td>
+            <td>${g.eco ? `<code>${esc(g.eco)}</code>` : ''}</td>
+            <td class="text-muted small">${g.plyCount ?? '?'}</td>
+            <td onclick="event.stopPropagation()" style="white-space:nowrap">
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 me-1" onclick="viewGame('${g.id}')" title="Ansehen"><i class="bi bi-eye"></i></button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1" onclick="editGame('${g.id}')" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="confirmDelete('${g.id}')" title="Löschen"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>`).join('');
+}
+
+document.getElementById('search-input').addEventListener('input', renderList);
+document.getElementById('filter-result').addEventListener('change', renderList);
+document.getElementById('sort-by').addEventListener('change', renderList);
+
+// ══════════════════════════════════════════════════════════
+// FORM
+// ══════════════════════════════════════════════════════════
+function openNewForm() {
+    resetForm();
+    showView('form');
+    // Switch to PGN tab by default
+    const pgnTabBtn = document.querySelector('[data-bs-target="#tab-pgn-text"]');
+    if (pgnTabBtn) bootstrap.Tab.getOrCreateInstance(pgnTabBtn).show();
+}
+
+function resetForm() {
+    document.getElementById('game-id').value = '';
+    document.getElementById('game-form').reset();
+    document.getElementById('pgn-raw').value = '';
+    document.getElementById('pgn-val-msg').innerHTML = '';
+    document.getElementById('form-title').textContent = 'Neue Partie';
+    BoardInput.reset();
+}
+
+function fillForm(g) {
+    document.getElementById('game-id').value       = g.id || '';
+    document.getElementById('f-white').value       = g.white || '';
+    document.getElementById('f-white-elo').value   = g.whiteElo || '';
+    document.getElementById('f-black').value       = g.black || '';
+    document.getElementById('f-black-elo').value   = g.blackElo || '';
+    document.getElementById('f-result').value      = g.result || '1-0';
+    document.getElementById('f-date').value        = g.date ? g.date.replace(/\./g, '-') : '';
+    document.getElementById('f-round').value       = g.round || '';
+    document.getElementById('f-eco').value         = g.eco || '';
+    document.getElementById('f-event').value       = g.event || '';
+    document.getElementById('f-site').value        = g.site || '';
+    document.getElementById('f-opening').value     = g.opening || '';
+    document.getElementById('f-time-control').value = g.timeControl || '';
+    document.getElementById('f-pgn').value         = g.pgn || '';
+    document.getElementById('f-notes').value       = g.notes || '';
+    document.getElementById('pgn-raw').value       = '';
+    document.getElementById('pgn-val-msg').innerHTML = '';
+}
+
+function editGame(id) {
+    const g = DB.get(id);
+    if (!g) return;
+    document.getElementById('form-title').textContent = 'Partie bearbeiten';
+    fillForm(g);
+    showView('form');
+    const pgnTabBtn = document.querySelector('[data-bs-target="#tab-pgn-text"]');
+    if (pgnTabBtn) bootstrap.Tab.getOrCreateInstance(pgnTabBtn).show();
+}
+
+function editCurrentGame() { if (Viewer.currentId) editGame(Viewer.currentId); }
+
+function parsePGN() {
+    const raw = document.getElementById('pgn-raw').value.trim();
+    if (!raw) return;
+    const chess = new Chess();
+    if (!chess.load_pgn(raw)) { showToast('Ungültige PGN.', 'danger'); return; }
+    const h = chess.header();
+    const set = (id, v) => { if (v) document.getElementById(id).value = v; };
+    set('f-white', h.White); set('f-white-elo', h.WhiteElo);
+    set('f-black', h.Black); set('f-black-elo', h.BlackElo);
+    set('f-result', h.Result); set('f-round', h.Round);
+    set('f-eco', h.ECO); set('f-event', h.Event); set('f-site', h.Site);
+    set('f-opening', h.Opening); set('f-time-control', h.TimeControl);
+    if (h.Date) {
+        try { document.getElementById('f-date').value = h.Date.replace(/\?/g,'01').replace(/\./g,'-'); } catch {}
+    }
+    const movesOnly = chess.pgn().replace(/\[[\s\S]*?\]\s*/g, '').trim();
+    document.getElementById('f-pgn').value = movesOnly;
+    showToast('PGN geparst!');
+}
+
+function validatePGN() {
+    const pgn = document.getElementById('f-pgn').value.trim();
+    const msg = document.getElementById('pgn-val-msg');
+    if (!pgn) { msg.innerHTML = ''; return; }
+    const chess = new Chess();
+    if (chess.load_pgn(pgn)) {
+        const n = chess.history().length;
+        msg.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Gültig — ${n} Halbzüge (${Math.ceil(n/2)} Züge)</span>`;
+    } else {
+        msg.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Ungültige PGN</span>';
+    }
+}
+
+document.getElementById('game-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('save-btn');
+    const pgn = document.getElementById('f-pgn').value.trim();
+    const dateVal = document.getElementById('f-date').value;
+
+    const game = {
+        white:       document.getElementById('f-white').value.trim(),
+        black:       document.getElementById('f-black').value.trim(),
+        whiteElo:    document.getElementById('f-white-elo').value,
+        blackElo:    document.getElementById('f-black-elo').value,
+        result:      document.getElementById('f-result').value,
+        date:        dateVal ? dateVal.replace(/-/g, '.') : '',
+        round:       document.getElementById('f-round').value,
+        eco:         document.getElementById('f-eco').value.toUpperCase(),
+        event:       document.getElementById('f-event').value.trim(),
+        site:        document.getElementById('f-site').value.trim(),
+        opening:     document.getElementById('f-opening').value.trim(),
+        timeControl: document.getElementById('f-time-control').value,
+        pgn,
+        notes:       document.getElementById('f-notes').value.trim(),
+        plyCount:    pgnPlyCount(pgn),
+    };
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Speichern…';
+    try {
+        const id = document.getElementById('game-id').value;
+        if (id) await DB.update(id, game);
+        else    await DB.add(game);
+        showToast('Partie gespeichert!');
+        showView('list');
+    } catch (err) {
+        showToast('Fehler: ' + err.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save me-1"></i>Speichern';
+    }
+});
+
+// Tab sync: Board → PGN
+document.getElementById('tab-pgn-text').addEventListener('show.bs.tab', function() {
+    const pgn = BoardInput.getPGN();
+    if (pgn) document.getElementById('f-pgn').value = pgn;
+});
+
+// Tab sync: PGN → Board
+document.getElementById('tab-board-input').addEventListener('show.bs.tab', function() {
+    const pgn = document.getElementById('f-pgn').value.trim();
+    BoardInput.init();
+    if (pgn) BoardInput.loadPGN(pgn);
+    else     BoardInput.reset();
+});
+
+// ══════════════════════════════════════════════════════════
+// BOARD INPUT
+// ══════════════════════════════════════════════════════════
+const BoardInput = {
+    board: null,
+    chess: new Chess(),
+
+    init() {
+        if (this.board) { setTimeout(() => this.board.resize(), 30); return; }
+        const self = this;
+        this.board = Chessboard('input-board', {
+            draggable: true,
+            position:  'start',
+            pieceTheme: PIECE_THEME,
+            dropOffBoard: 'snapback',
+            onDragStart(source, piece) {
+                if (self.chess.game_over()) return false;
+                if (self.chess.turn() === 'w' && piece.startsWith('b')) return false;
+                if (self.chess.turn() === 'b' && piece.startsWith('w')) return false;
+            },
+            onDrop(source, target) {
+                const move = self.chess.move({ from: source, to: target, promotion: 'q' });
+                if (!move) return 'snapback';
+                self._updateDisplay();
+            },
+            onSnapEnd() {
+                self.board.position(self.chess.fen());
+                self._highlightLast();
+            }
+        });
+        this._updateDisplay();
+    },
+
+    _updateDisplay() {
+        const moves = this.chess.history();
+        const el    = document.getElementById('input-move-list');
+        const stat  = document.getElementById('input-status');
+
+        if (!moves.length) {
+            el.innerHTML = '<span class="text-muted">Noch keine Züge. Ziehe eine Figur!</span>';
+            stat.textContent = 'Startposition';
+        } else {
+            let html = '';
+            for (let i = 0; i < moves.length; i++) {
+                if (i % 2 === 0) html += `<span class="move-number">${Math.floor(i/2)+1}.</span>`;
+                html += `<span class="move-btn">${moves[i]}</span> `;
+            }
+            el.innerHTML = html;
+            el.scrollTop = el.scrollHeight;
+            const turn = this.chess.turn() === 'w' ? 'Weiß' : 'Schwarz';
+            stat.textContent = `Zug ${Math.ceil(moves.length/2)+1} — ${turn} am Zug`;
+        }
+        // Sync to PGN textarea in background (only if PGN tab not active)
+        const pgnTabActive = document.getElementById('tab-pgn-text').classList.contains('show');
+        if (!pgnTabActive) {
+            const pgn = this.getPGN();
+            if (pgn) document.getElementById('f-pgn').value = pgn;
+        }
+    },
+
+    _highlightLast() {
+        document.querySelectorAll('.highlight-from,.highlight-to').forEach(el => {
+            el.classList.remove('highlight-from','highlight-to');
+        });
+        const hist = this.chess.history({ verbose: true });
+        if (!hist.length) return;
+        const last = hist[hist.length - 1];
+        const fromEl = document.querySelector(`[data-square="${last.from}"]`);
+        const toEl   = document.querySelector(`[data-square="${last.to}"]`);
+        if (fromEl) fromEl.classList.add('highlight-from');
+        if (toEl)   toEl.classList.add('highlight-to');
+    },
+
+    undo() {
+        this.chess.undo();
+        this.board.position(this.chess.fen(), false);
+        this._updateDisplay();
+        this._highlightLast();
+    },
+
+    reset() {
+        this.chess = new Chess();
+        if (this.board) this.board.position('start', false);
+        const el = document.getElementById('input-move-list');
+        if (el) el.innerHTML = '<span class="text-muted">Noch keine Züge. Ziehe eine Figur!</span>';
+        const stat = document.getElementById('input-status');
+        if (stat) stat.textContent = 'Startposition';
+        document.getElementById('f-pgn').value = '';
+    },
+
+    flip() { if (this.board) this.board.flip(); },
+
+    getPGN() {
+        if (!this.chess.history().length) return '';
+        return this.chess.pgn().replace(/\[[\s\S]*?\]\s*/g, '').trim();
+    },
+
+    loadPGN(pgn) {
+        const c = new Chess();
+        if (!c.load_pgn(pgn)) return;
+        this.chess = c;
+        if (this.board) this.board.position(c.fen(), false);
+        this._updateDisplay();
+        this._highlightLast();
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+// DELETE
+// ══════════════════════════════════════════════════════════
+let _deleteId = null;
+function confirmDelete(id) {
+    const g = DB.get(id);
+    if (!g) return;
+    _deleteId = id;
+    document.getElementById('delete-label').textContent = `${g.white || '?'} vs ${g.black || '?'} — ${g.result || '*'}`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteModal')).show();
+}
+
+document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+    if (!_deleteId) return;
+    const id = _deleteId; _deleteId = null;
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    try {
+        await DB.delete(id);
+        renderList();
+        showToast('Partie gelöscht.', 'warning');
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+});
+
+// ══════════════════════════════════════════════════════════
+// VIEWER
+// ══════════════════════════════════════════════════════════
+const Viewer = {
+    board:       null,
+    chess:       null,
+    moves:       [],
+    idx:         -1,
+    autoTimer:   null,
+    currentId:   null,
+    currentGame: null,
+    orientation: 'white',
+
+    load(id) {
+        const g = DB.get(id);
+        if (!g) return;
+        this.currentId   = id;
+        this.currentGame = g;
+        this.stopAutoplay();
+
+        // Header
+        document.getElementById('v-title').textContent       = `${g.white || '?'} vs ${g.black || '?'}`;
+        document.getElementById('v-result-badge').innerHTML  = resultBadge(g.result);
+        document.getElementById('v-subtitle').textContent    =
+            [g.event, g.site, fmtDate(g.date), g.round ? 'Runde ' + g.round : ''].filter(Boolean).join(' · ');
+
+        // Players
+        document.getElementById('v-white-name').textContent = g.white || '?';
+        document.getElementById('v-black-name').textContent = g.black || '?';
+        document.getElementById('v-white-elo').textContent  = g.whiteElo ? 'Elo ' + g.whiteElo : '';
+        document.getElementById('v-black-elo').textContent  = g.blackElo ? 'Elo ' + g.blackElo : '';
+
+        // Info table
+        const rows = [
+            ['Turnier',       g.event],
+            ['Ort',           g.site],
+            ['Datum',         fmtDate(g.date)],
+            ['Runde',         g.round],
+            ['ECO',           g.eco],
+            ['Eröffnung',     g.opening],
+            ['Zeitkontrolle', g.timeControl],
+        ].filter(([,v]) => v);
+        document.getElementById('v-info').innerHTML = rows.map(([k,v]) =>
+            `<div class="row g-0 mb-1"><div class="col-5 text-muted small">${k}</div><div class="col-7 small fw-semibold">${esc(v)}</div></div>`
+        ).join('') || '<small class="text-muted">–</small>';
+
+        // Notes
+        const nc = document.getElementById('v-notes-card');
+        if (g.notes) { nc.style.display = ''; document.getElementById('v-notes').textContent = g.notes; }
+        else nc.style.display = 'none';
+
+        // Load PGN
+        this.chess = new Chess();
+        if (g.pgn) { try { this.chess.load_pgn(g.pgn); } catch {} }
+        this.moves = this.chess.history({ verbose: true });
+        this.chess.reset();
+        this.idx = -1;
+
+        // Board
+        if (!this.board) {
+            this.board = Chessboard('viewer-board', {
+                position: 'start', pieceTheme: PIECE_THEME, orientation: this.orientation
+            });
+        } else {
+            this.board.position('start', false);
+            this.board.orientation(this.orientation);
+        }
+
+        this._renderMoveList();
+        this._updateCounter();
+        showView('viewer');
+    },
+
+    _renderMoveList() {
+        const el = document.getElementById('move-list');
+        if (!this.moves.length) { el.innerHTML = '<span class="text-muted small">Keine Züge vorhanden.</span>'; return; }
+        let html = '';
+        for (let i = 0; i < this.moves.length; i++) {
+            if (i % 2 === 0) html += `<span class="move-number">${Math.floor(i/2)+1}.</span>`;
+            html += `<button class="move-btn" id="mb-${i}" onclick="Viewer.goTo(${i})">${this.moves[i].san}</button> `;
+            if (i % 2 === 1) html += ' ';
+        }
+        if (this.currentGame?.result) html += `<span class="move-result">${this.currentGame.result}</span>`;
+        el.innerHTML = html;
+    },
+
+    _apply(upTo) {
+        this.chess.reset();
+        for (let i = 0; i <= upTo; i++) this.chess.move(this.moves[i].san);
+    },
+
+    goTo(i) {
+        this._apply(i); this.idx = i;
+        this.board.position(this.chess.fen());
+        this._updateCounter(); this._highlight();
+    },
+    goFirst() {
+        this.chess.reset(); this.idx = -1;
+        this.board.position('start', false);
+        this._updateCounter(); this._highlight();
+    },
+    goPrev() {
+        if (this.idx < 0) return;
+        this.idx--;
+        if (this.idx < 0) { this.chess.reset(); this.board.position('start', false); }
+        else { this._apply(this.idx); this.board.position(this.chess.fen()); }
+        this._updateCounter(); this._highlight();
+    },
+    goNext() {
+        if (this.idx >= this.moves.length - 1) return;
+        this.idx++;
+        this.chess.move(this.moves[this.idx].san);
+        this.board.position(this.chess.fen());
+        this._updateCounter(); this._highlight();
+    },
+    goLast() {
+        if (!this.moves.length) return;
+        this._apply(this.moves.length - 1);
+        this.idx = this.moves.length - 1;
+        this.board.position(this.chess.fen());
+        this._updateCounter(); this._highlight();
+    },
+
+    _highlight() {
+        document.querySelectorAll('.move-btn').forEach(b => b.classList.remove('active'));
+        if (this.idx >= 0) {
+            const btn = document.getElementById(`mb-${this.idx}`);
+            if (btn) { btn.classList.add('active'); btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+        }
+    },
+
+    _updateCounter() {
+        const cur = this.idx + 1, tot = this.moves.length;
+        document.getElementById('move-counter').textContent =
+            cur === 0 ? 'Startposition' : `Halbzug ${cur} / ${tot}  ·  Zug ${Math.ceil(cur/2)}`;
+    },
+
+    flip() {
+        this.orientation = this.orientation === 'white' ? 'black' : 'white';
+        this.board.flip();
+    },
+
+    stopAutoplay() {
+        if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; }
+        document.getElementById('autoplay-btn').innerHTML = '<i class="bi bi-play-fill"></i>';
+    },
+
+    toggleAutoplay() {
+        if (this.autoTimer) { this.stopAutoplay(); return; }
+        document.getElementById('autoplay-btn').innerHTML = '<i class="bi bi-pause-fill"></i>';
+        this.autoTimer = setInterval(() => {
+            if (this.idx >= this.moves.length - 1) this.stopAutoplay();
+            else this.goNext();
+        }, 1000);
+    }
+};
+
+function viewGame(id) {
+    Viewer.stopAutoplay();
+    Viewer.load(id);
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORT / IMPORT
+// ══════════════════════════════════════════════════════════
+function exportPGN() {
+    const g = Viewer.currentGame;
+    if (!g) return;
+    const headers = [
+        ['Event',       g.event     || '?'],
+        ['Site',        g.site      || '?'],
+        ['Date',        g.date      || '????.??.??'],
+        ['Round',       g.round     || '?'],
+        ['White',       g.white     || '?'],
+        ['Black',       g.black     || '?'],
+        ['Result',      g.result    || '*'],
+        ['WhiteElo',    g.whiteElo  || ''],
+        ['BlackElo',    g.blackElo  || ''],
+        ['ECO',         g.eco       || ''],
+        ['Opening',     g.opening   || ''],
+        ['TimeControl', g.timeControl || ''],
+    ].filter(([,v]) => v).map(([k,v]) => `[${k} "${v}"]`).join('\n');
+    const content = headers + '\n\n' + (g.pgn || '*') + '\n';
+    _download(content, `${(g.white||'?').replace(/[^a-z0-9]/gi,'_')}_vs_${(g.black||'?').replace(/[^a-z0-9]/gi,'_')}.pgn`, 'text/plain');
+}
+
+function exportJSON() {
+    _download(JSON.stringify(S.games, null, 2), `chess_db_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+    showToast('Datenbank exportiert (entschlüsselt).');
+}
+
+function importJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!Array.isArray(data)) throw new Error('Kein gültiges Array');
+            const existing = DB.all();
+            const ids = new Set(existing.map(g => g.id));
+            const merged = [...existing, ...data.filter(g => !ids.has(g.id))];
+            await DB.replaceAll(merged);
+            renderList();
+            showToast(`Import: ${merged.length - existing.length} neue Partie(n).`);
+        } catch (err) {
+            showToast('Import fehlgeschlagen: ' + err.message, 'danger');
+        }
+    };
+    reader.readAsText(file);
+    input.value = '';
+}
+
+function _download(content, filename, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+    if (!document.getElementById('view-viewer').classList.contains('active')) return;
+    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    const map = {
+        ArrowLeft:  () => Viewer.goPrev(),
+        ArrowRight: () => Viewer.goNext(),
+        Home:       () => Viewer.goFirst(),
+        End:        () => Viewer.goLast(),
+        f:          () => Viewer.flip(),
+        F:          () => Viewer.flip(),
+        ' ':        () => Viewer.toggleAutoplay(),
+    };
+    if (map[e.key]) { e.preventDefault(); map[e.key](); }
+});
+
+window.addEventListener('resize', () => {
+    if (Viewer.board) Viewer.board.resize();
+    if (BoardInput.board) BoardInput.board.resize();
+});
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+(function init() {
+    // Prefill login settings fields from localStorage
+    const s = getSettings();
+    if (s.ghToken) document.getElementById('s-token').value = s.ghToken;
+    if (s.ghOwner) document.getElementById('s-owner').value = s.ghOwner;
+    if (s.ghRepo)  document.getElementById('s-repo').value  = s.ghRepo;
+    if (s.ghPath)  document.getElementById('s-path').value  = s.ghPath;
+
+    // Auto-expand settings if not configured
+    const configured = s.ghToken && s.ghOwner && s.ghRepo;
+    if (!configured) {
+        bootstrap.Collapse.getOrCreateInstance(document.getElementById('gh-settings-panel')).show();
+        const infoEl = document.getElementById('login-info');
+        infoEl.textContent = 'Ersteinrichtung: Bitte GitHub Einstellungen ausfüllen und speichern.';
+        infoEl.style.display = '';
+    }
+
+    // Login button
+    document.getElementById('login-btn').addEventListener('click', login);
+    document.getElementById('login-pw').addEventListener('keydown', e => {
+        if (e.key === 'Enter') login();
+    });
+})();
+</script>
+</body>
+</html>
