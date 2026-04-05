@@ -9,16 +9,21 @@
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
         :root {
-            --bg:     #0d0d1a;
-            --card:   #161627;
-            --nav:    #1a1a2e;
-            --accent: #e94560;
-            --border: #2e2e50;
-            --text:   #f0f0f5;
-            --muted:  #a8a8c8;
+            --bg:       #0d0d1a;
+            --card:     #161627;
+            --nav:      #1a1a2e;
+            --accent:   #e94560;
+            --border:   #2e2e50;
+            --text:     #f0f0f5;
+            --muted:    #a8a8c8;
+            --row-text: #c8c8e0;  /* table rows — slightly dimmer than headings */
         }
         *, *::before, *::after { box-sizing: border-box; }
-        body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: system-ui, sans-serif; }
+        /* GDPR-safe system font stack — no external font API calls */
+        body {
+            background: var(--bg); color: var(--text); min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }
 
         /* ── LOADING OVERLAY ─────────────────────────────── */
         #loading-overlay {
@@ -52,26 +57,27 @@
         .card-body { padding: 1rem; }
 
         /* ── TABLE ───────────────────────────────────────── */
-        .table { color: var(--text); margin: 0; }
+        .table { color: var(--row-text); margin: 0; }
         .table thead th {
             background: #0a0a18; border-color: var(--border);
             color: var(--muted); font-size: .75rem; text-transform: uppercase;
             letter-spacing: .5px; white-space: nowrap; padding: .5rem .75rem;
         }
-        .table tbody td { border-color: var(--border); vertical-align: middle; padding: .45rem .75rem; }
-        .table tbody tr:hover { background: rgba(233,69,96,.07); cursor: pointer; }
+        .table tbody td { border-color: var(--border); vertical-align: middle; padding: .45rem .75rem; color: var(--row-text); }
+        .table tbody tr:hover { background: rgba(233,69,96,.10); cursor: pointer; }
+        .table tbody .fw-semibold { color: #e8e8f8; }
 
         /* ── FORMS ───────────────────────────────────────── */
         .form-control, .form-select {
-            background: #0a0a18; border-color: var(--border); color: var(--text);
+            background: #1e1e34; border-color: var(--border); color: #f0f0f5;
         }
         .form-control:focus, .form-select:focus {
-            background: #0a0a18; border-color: var(--accent); color: var(--text);
+            background: #1e1e34; border-color: var(--accent); color: #f0f0f5;
             box-shadow: 0 0 0 .18rem rgba(233,69,96,.22);
         }
-        .form-control::placeholder { color: #404060; }
-        .form-label { color: #9090b0; font-size: .82rem; margin-bottom: 3px; }
-        select.form-select option { background: #1a1a2e; }
+        .form-control::placeholder { color: #6060a0; }
+        .form-label { color: var(--muted); font-size: .82rem; margin-bottom: 3px; }
+        select.form-select option { background: #1e1e34; color: #f0f0f5; }
 
         /* ── BUTTONS ─────────────────────────────────────── */
         .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -123,9 +129,15 @@
 
         .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
 
-        /* highlight last move squares */
-        .highlight-from { background: rgba(255,200,0,.32) !important; }
-        .highlight-to   { background: rgba(255,200,0,.56) !important; }
+        /* highlight last move squares — bright cyan outline + fill for contrast on both board colors */
+        .highlight-from {
+            background: rgba(0,220,255,.45) !important;
+            box-shadow: inset 0 0 0 3px rgba(0,200,240,.9);
+        }
+        .highlight-to {
+            background: rgba(0,220,255,.70) !important;
+            box-shadow: inset 0 0 0 3px rgba(0,200,240,1);
+        }
 
         /* ── INPUT MODE ──────────────────────────────────── */
         .input-move-display {
@@ -294,9 +306,10 @@
                         <div class="col-6 col-md-2">
                             <select id="filter-result" class="form-select form-select-sm">
                                 <option value="">Alle Ergebnisse</option>
-                                <option value="1-0">1-0 Weiß</option>
-                                <option value="0-1">0-1 Schwarz</option>
-                                <option value="1/2-1/2">½-½ Remis</option>
+                                <option value="win">Siege</option>
+                                <option value="draw">Remis</option>
+                                <option value="loss">Niederlagen</option>
+                                <option value="1/2-1/2">½-½ (alle Remis)</option>
                                 <option value="*">* Unbekannt</option>
                             </select>
                         </div>
@@ -306,8 +319,10 @@
                                 <option value="createdAt-asc">Älteste zuerst</option>
                                 <option value="date-desc">Datum (neu)</option>
                                 <option value="date-asc">Datum (alt)</option>
-                                <option value="white-asc">Weiß A–Z</option>
-                                <option value="black-asc">Schwarz A–Z</option>
+                                <option value="opponent-asc">Gegner A–Z</option>
+                                <option value="opponent-desc">Gegner Z–A</option>
+                                <option value="eco-asc">ECO A–Z</option>
+                                <option value="eco-desc">ECO Z–A</option>
                             </select>
                         </div>
                         <div class="col-6 col-md-2 ms-md-auto">
@@ -541,7 +556,7 @@
                                 </div>
                                 <span class="text-muted small" id="v-black-elo"></span>
                             </div>
-                            <div id="viewer-board" style="max-width:600px;margin:0 auto"></div>
+                            <div id="viewer-board" style="max-width:740px;margin:0 auto"></div>
                             <div class="player-bar mt-1">
                                 <div class="d-flex align-items-center gap-2">
                                     <span style="width:14px;height:14px;background:#f0d9b5;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
@@ -1142,9 +1157,17 @@ function renderStats(games) {
         </div>`).join('');
 }
 
+// Returns the opponent name relative to MY_NAME
+function opponentOf(g) {
+    const me = MY_NAME.toLowerCase();
+    if ((g.white || '').toLowerCase() === me) return g.black || '';
+    if ((g.black || '').toLowerCase() === me) return g.white || '';
+    return g.black || g.white || '';
+}
+
 function renderList() {
     const search  = document.getElementById('search-input').value.toLowerCase();
-    const filterR = document.getElementById('filter-result').value;
+    const filterV = document.getElementById('filter-result').value;
     const sortBy  = document.getElementById('sort-by').value;
 
     document.getElementById('clear-search').style.display = search ? '' : 'none';
@@ -1155,12 +1178,31 @@ function renderList() {
     if (search) games = games.filter(g =>
         [g.white, g.black, g.event, g.site, g.eco, g.opening].some(v => (v || '').toLowerCase().includes(search))
     );
-    if (filterR) games = games.filter(g => g.result === filterR);
+
+    // Filter: my result perspective or special values
+    if (filterV === 'win' || filterV === 'draw' || filterV === 'loss') {
+        games = games.filter(g => myResult(g) === filterV);
+    } else if (filterV === '1/2-1/2') {
+        games = games.filter(g => g.result === '1/2-1/2');
+    } else if (filterV === '*') {
+        games = games.filter(g => g.result === '*');
+    }
 
     const [field, dir] = sortBy.split('-');
+    const asc = dir === 'asc';
     games.sort((a, b) => {
-        let va = a[field] ?? '', vb = b[field] ?? '';
-        if (dir === 'desc') [va, vb] = [vb, va];
+        let va, vb;
+        if (field === 'opponent') {
+            va = opponentOf(a).toLowerCase();
+            vb = opponentOf(b).toLowerCase();
+        } else if (field === 'eco') {
+            va = (a.eco || '').toLowerCase();
+            vb = (b.eco || '').toLowerCase();
+        } else {
+            va = a[field] ?? '';
+            vb = b[field] ?? '';
+        }
+        if (!asc) [va, vb] = [vb, va];
         return va < vb ? -1 : va > vb ? 1 : 0;
     });
 
@@ -1181,7 +1223,7 @@ function renderList() {
             <td class="small text-muted">${fmtDate(g.date)}</td>
             <td class="small text-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.event || '')}</td>
             <td>${g.eco ? `<code>${esc(g.eco)}</code>` : ''}</td>
-            <td class="text-muted small">${g.plyCount ?? '?'}</td>
+            <td class="text-muted small">${g.plyCount ? Math.ceil(g.plyCount / 2) : '?'}</td>
             <td onclick="event.stopPropagation()" style="white-space:nowrap">
                 <button class="btn btn-sm btn-outline-primary py-0 px-2 me-1" onclick="viewGame('${g.id}')" title="Ansehen"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1" onclick="editGame('${g.id}')" title="Bearbeiten"><i class="bi bi-pencil"></i></button>
