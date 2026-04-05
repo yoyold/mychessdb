@@ -408,7 +408,7 @@
                         <label class="form-label fw-semibold mb-1">Züge eingeben</label>
                         <ul class="nav nav-tabs" id="move-input-tabs">
                             <li class="nav-item">
-                                <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#tab-pgn-text">
+                                <button class="nav-link active" id="pgn-tab-btn" type="button" data-bs-toggle="tab" data-bs-target="#tab-pgn-text">
                                     <i class="bi bi-textarea-t me-1"></i>PGN-Text
                                 </button>
                             </li>
@@ -673,8 +673,21 @@
 // ══════════════════════════════════════════════════════════
 // UTILITY HELPERS
 // ══════════════════════════════════════════════════════════
-const PIECE_THEME = 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/src/img/chesspieces/wikipedia/{piece}.png';
+const MY_NAME = 'Dony, Lukas';
 const SETTINGS_KEY = 'chess_settings';
+
+// Wikimedia Commons SVG chess pieces (Cburnett set)
+const _PIECES = {
+    wK:'4/42/Chess_klt45.svg', wQ:'1/15/Chess_qlt45.svg', wR:'7/72/Chess_rlt45.svg',
+    wB:'b/b1/Chess_blt45.svg', wN:'7/70/Chess_nlt45.svg', wP:'4/45/Chess_plt45.svg',
+    bK:'f/f0/Chess_kdt45.svg', bQ:'4/47/Chess_qdt45.svg', bR:'f/ff/Chess_rdt45.svg',
+    bB:'9/98/Chess_bdt45.svg', bN:'e/ef/Chess_ndt45.svg', bP:'c/c7/Chess_pdt45.svg',
+};
+function pieceTheme(piece) {
+    return _PIECES[piece]
+        ? `https://upload.wikimedia.org/wikipedia/commons/${_PIECES[piece]}`
+        : '';
+}
 
 function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1033,15 +1046,28 @@ function showView(name) {
 // ══════════════════════════════════════════════════════════
 // GAME LIST
 // ══════════════════════════════════════════════════════════
+function myResult(g) {
+    // Returns 'win', 'draw', 'loss', or null from MY_NAME's perspective
+    const isWhite = (g.white || '').trim().toLowerCase() === MY_NAME.toLowerCase();
+    const isBlack = (g.black || '').trim().toLowerCase() === MY_NAME.toLowerCase();
+    if (!isWhite && !isBlack) return null;
+    if (g.result === '1/2-1/2') return 'draw';
+    if ((isWhite && g.result === '1-0') || (isBlack && g.result === '0-1')) return 'win';
+    if ((isWhite && g.result === '0-1') || (isBlack && g.result === '1-0')) return 'loss';
+    return null;
+}
+
 function renderStats(games) {
-    const w = games.filter(g => g.result === '1-0').length;
-    const d = games.filter(g => g.result === '1/2-1/2').length;
-    const l = games.filter(g => g.result === '0-1').length;
+    const total = games.length;
+    const myGames = games.filter(g => myResult(g) !== null);
+    const wins   = myGames.filter(g => myResult(g) === 'win').length;
+    const draws  = myGames.filter(g => myResult(g) === 'draw').length;
+    const losses = myGames.filter(g => myResult(g) === 'loss').length;
     document.getElementById('stats-row').innerHTML = [
-        [games.length, 'Partien gesamt', 'var(--text)'],
-        [w, 'Weiß gewinnt',    '#4ade80'],
-        [d, 'Remis',           '#facc15'],
-        [l, 'Schwarz gewinnt', '#f87171'],
+        [total,  'Partien gesamt', 'var(--text)'],
+        [wins,   'Siege',          '#4ade80'],
+        [draws,  'Remis',          '#facc15'],
+        [losses, 'Niederlagen',    '#f87171'],
     ].map(([n, label, color]) => `
         <div class="col-6 col-md-3">
             <div class="stat-card">
@@ -1155,6 +1181,11 @@ function editGame(id) {
 
 function editCurrentGame() { if (Viewer.currentId) editGame(Viewer.currentId); }
 
+// Auto-parse when pasting into the raw PGN box
+document.getElementById('pgn-raw').addEventListener('paste', () => {
+    setTimeout(parsePGN, 50);
+});
+
 function parsePGN() {
     const raw = document.getElementById('pgn-raw').value.trim();
     if (!raw) return;
@@ -1228,14 +1259,15 @@ document.getElementById('game-form').addEventListener('submit', async function(e
     }
 });
 
-// Tab sync: Board → PGN
-document.getElementById('tab-pgn-text').addEventListener('show.bs.tab', function() {
+// Tab sync: switching TO pgn tab → pull moves from board
+document.getElementById('pgn-tab-btn').addEventListener('show.bs.tab', function() {
     const pgn = BoardInput.getPGN();
     if (pgn) document.getElementById('f-pgn').value = pgn;
 });
 
-// Tab sync: PGN → Board
-document.getElementById('tab-board-input').addEventListener('show.bs.tab', function() {
+// Tab sync: switching TO board tab → init board, load pgn if present
+// Use 'shown' (not 'show') so the div is visible and the board can measure its width
+document.getElementById('board-tab-btn').addEventListener('shown.bs.tab', function() {
     const pgn = document.getElementById('f-pgn').value.trim();
     BoardInput.init();
     if (pgn) BoardInput.loadPGN(pgn);
@@ -1255,7 +1287,7 @@ const BoardInput = {
         this.board = Chessboard('input-board', {
             draggable: true,
             position:  'start',
-            pieceTheme: PIECE_THEME,
+            pieceTheme: pieceTheme,
             dropOffBoard: 'snapback',
             onDragStart(source, piece) {
                 if (self.chess.game_over()) return false;
@@ -1432,10 +1464,14 @@ const Viewer = {
         this.chess.reset();
         this.idx = -1;
 
+        // Auto-orient: I (MY_NAME) am always at the bottom
+        const iAmBlack = (g.black || '').trim().toLowerCase() === MY_NAME.toLowerCase();
+        this.orientation = iAmBlack ? 'black' : 'white';
+
         // Board
         if (!this.board) {
             this.board = Chessboard('viewer-board', {
-                position: 'start', pieceTheme: PIECE_THEME, orientation: this.orientation
+                position: 'start', pieceTheme: pieceTheme, orientation: this.orientation
             });
         } else {
             this.board.position('start', false);
