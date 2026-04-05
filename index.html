@@ -325,12 +325,18 @@
                                 <option value="eco-desc">ECO Z–A</option>
                             </select>
                         </div>
-                        <div class="col-6 col-md-2 ms-md-auto">
+                        <div class="col-6 col-md-auto ms-md-auto">
+                            <label class="btn btn-sm btn-outline-info w-100 mb-0" title="Mehrere Partien aus einer PGN-Datei importieren">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i>PGN importieren
+                                <input type="file" id="import-pgn-file" accept=".pgn,.txt" style="display:none" onchange="importPGNFile(this)">
+                            </label>
+                        </div>
+                        <div class="col-6 col-md-auto">
                             <button class="btn btn-sm btn-outline-secondary w-100" onclick="exportJSON()">
                                 <i class="bi bi-download me-1"></i>Export JSON
                             </button>
                         </div>
-                        <div class="col-6 col-md-2">
+                        <div class="col-6 col-md-auto">
                             <label class="btn btn-sm btn-outline-secondary w-100 mb-0">
                                 <i class="bi bi-upload me-1"></i>Import JSON
                                 <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(this)">
@@ -659,6 +665,50 @@
             <div class="modal-footer border-secondary">
                 <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                 <button class="btn btn-sm btn-danger" id="confirm-delete-btn">Löschen &amp; Speichern</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PGN Bulk Import Preview -->
+<div class="modal fade" id="pgnImportModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="background:var(--card);border-color:var(--border)">
+            <div class="modal-header border-secondary">
+                <h6 class="modal-title"><i class="bi bi-file-earmark-arrow-up me-2 text-info"></i>PGN-Datei importieren</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="px-3 pt-3 pb-2 d-flex align-items-center gap-3" style="border-bottom:1px solid var(--border)">
+                    <span id="pgn-import-count" class="fw-semibold"></span>
+                    <small class="text-muted">Wähle aus welche Partien importiert werden sollen</small>
+                    <div class="ms-auto d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="pgnImportSelectAll(true)">Alle auswählen</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="pgnImportSelectAll(false)">Keine</button>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height:55vh">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:36px"></th>
+                                <th>Weiß</th><th>Elo</th>
+                                <th>Schwarz</th><th>Elo</th>
+                                <th>Ergebnis</th><th>Datum</th>
+                                <th>Turnier</th><th>ECO</th><th>Züge</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pgn-import-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary d-flex align-items-center gap-3">
+                <span id="pgn-import-selected" class="small text-muted"></span>
+                <button class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Abbrechen</button>
+                <button class="btn btn-accent" id="pgn-import-confirm-btn" onclick="confirmPGNImport()">
+                    <i class="bi bi-file-earmark-arrow-up me-1"></i>Ausgewählte importieren
+                </button>
             </div>
         </div>
     </div>
@@ -1985,6 +2035,178 @@ function importJSON(input) {
     };
     reader.readAsText(file);
     input.value = '';
+}
+
+// ══════════════════════════════════════════════════════════
+// PGN BULK IMPORT
+// ══════════════════════════════════════════════════════════
+
+// Split a multi-game PGN text into individual game strings
+function splitPGN(text) {
+    // Each game starts with a header block ([Tag "Value"])
+    // We split on lines that start a new header block after non-header content
+    const games = [];
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+    let current = [];
+    let inGame = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isHeader = /^\s*\[/.test(line);
+        const isBlank  = /^\s*$/.test(line);
+
+        // Detect start of a new game: header line after we already have move content
+        if (isHeader && inGame) {
+            // Check if previous game has any move content
+            const prev = current.join('\n').trim();
+            if (prev) games.push(prev);
+            current = [line];
+            inGame = false;
+        } else {
+            current.push(line);
+            if (!isHeader && !isBlank) inGame = true;
+        }
+    }
+    if (current.length) {
+        const prev = current.join('\n').trim();
+        if (prev) games.push(prev);
+    }
+    return games.filter(g => g.includes('['));
+}
+
+// Parse a single PGN game string into our game object format
+function parseSinglePGN(pgn) {
+    const chess = new Chess();
+    const ok = chess.load_pgn(pgn, { sloppy: true });
+    const h = chess.header();
+    const dateRaw = h.Date || '';
+    const dateVal = dateRaw.replace(/\?/g, '01').replace(/\./g, '-');
+    const movesOnly = chess.pgn().replace(/\[[^\]]*\]\s*/g, '').trim();
+    return {
+        white:       h.White      || '',
+        black:       h.Black      || '',
+        whiteElo:    h.WhiteElo   || '',
+        blackElo:    h.BlackElo   || '',
+        result:      h.Result     || '*',
+        date:        dateRaw.replace(/\./g, '.').replace(/\?/g,'?'),
+        round:       h.Round      || '',
+        eco:         (h.ECO       || '').toUpperCase(),
+        event:       h.Event      || '',
+        site:        h.Site       || '',
+        opening:     h.Opening    || '',
+        timeControl: h.TimeControl|| '',
+        pgn:         ok ? pgn : pgn,   // keep original including comments
+        notes:       '',
+        plyCount:    chess.history().length,
+        _valid:      ok,
+    };
+}
+
+let _pgnImportGames = [];   // parsed game objects pending confirmation
+
+function importPGNFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+    const reader = new FileReader();
+    reader.onload = e => {
+        const text = e.target.result;
+        const rawGames = splitPGN(text);
+        if (!rawGames.length) { showToast('Keine Partien in der Datei gefunden.', 'danger'); return; }
+
+        const existing = new Set(DB.all().map(g =>
+            `${(g.white||'').toLowerCase()}|${(g.black||'').toLowerCase()}|${g.date||''}|${g.result||''}`
+        ));
+
+        _pgnImportGames = rawGames.map(raw => {
+            const g = parseSinglePGN(raw);
+            const key = `${(g.white||'').toLowerCase()}|${(g.black||'').toLowerCase()}|${g.date||''}|${g.result||''}`;
+            g._duplicate = existing.has(key);
+            return g;
+        });
+
+        _renderPGNImportTable();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('pgnImportModal')).show();
+    };
+    reader.readAsText(file);
+}
+
+function _renderPGNImportTable() {
+    const total = _pgnImportGames.length;
+    document.getElementById('pgn-import-count').textContent = `${total} Partie${total !== 1 ? 'n' : ''} gefunden`;
+
+    const tbody = document.getElementById('pgn-import-tbody');
+    tbody.innerHTML = _pgnImportGames.map((g, i) => {
+        const dupBadge = g._duplicate
+            ? '<span class="badge bg-warning text-dark ms-1" title="Ähnliche Partie existiert bereits">Duplikat?</span>'
+            : '';
+        const invBadge = !g._valid
+            ? '<span class="badge bg-danger ms-1" title="PGN ungültig">Fehler</span>'
+            : '<span class="badge bg-success">OK</span>';
+        // Don't pre-check duplicates
+        const checked = g._duplicate ? '' : 'checked';
+        return `<tr>
+            <td><input class="form-check-input pgn-import-cb" type="checkbox" data-idx="${i}" ${checked}></td>
+            <td class="fw-semibold small">${esc(g.white||'?')}</td>
+            <td class="text-muted small">${g.whiteElo||'–'}</td>
+            <td class="fw-semibold small">${esc(g.black||'?')}</td>
+            <td class="text-muted small">${g.blackElo||'–'}</td>
+            <td>${resultBadge(g.result)}</td>
+            <td class="small text-muted">${fmtDate(g.date)}</td>
+            <td class="small text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.event||'')}</td>
+            <td>${g.eco ? `<code>${esc(g.eco)}</code>` : ''}</td>
+            <td class="small text-muted">${g.plyCount ? Math.ceil(g.plyCount/2) : '?'}</td>
+            <td>${invBadge}${dupBadge}</td>
+        </tr>`;
+    }).join('');
+
+    // Live counter update
+    tbody.querySelectorAll('.pgn-import-cb').forEach(cb =>
+        cb.addEventListener('change', _updatePGNImportCounter)
+    );
+    _updatePGNImportCounter();
+}
+
+function _updatePGNImportCounter() {
+    const checked = document.querySelectorAll('.pgn-import-cb:checked').length;
+    document.getElementById('pgn-import-selected').textContent =
+        `${checked} von ${_pgnImportGames.length} ausgewählt`;
+}
+
+function pgnImportSelectAll(state) {
+    document.querySelectorAll('.pgn-import-cb').forEach(cb => cb.checked = state);
+    _updatePGNImportCounter();
+}
+
+async function confirmPGNImport() {
+    const btn = document.getElementById('pgn-import-confirm-btn');
+    const selected = [...document.querySelectorAll('.pgn-import-cb:checked')]
+        .map(cb => _pgnImportGames[parseInt(cb.dataset.idx)]);
+
+    if (!selected.length) { showToast('Keine Partien ausgewählt.', 'warning'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importiere…';
+
+    try {
+        const existing = DB.all();
+        const newGames = selected.map(g => {
+            const copy = { ...g };
+            delete copy._duplicate; delete copy._valid;
+            copy.id = uid();
+            copy.createdAt = new Date().toISOString();
+            return copy;
+        });
+        await DB.replaceAll([...existing, ...newGames]);
+        bootstrap.Modal.getInstance(document.getElementById('pgnImportModal')).hide();
+        renderList();
+        showToast(`${newGames.length} Partie${newGames.length !== 1 ? 'n' : ''} importiert!`);
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-file-earmark-arrow-up me-1"></i>Ausgewählte importieren';
+    }
 }
 
 function _download(content, filename, type) {
