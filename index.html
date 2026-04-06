@@ -356,14 +356,11 @@
                                 <option value="win">Siege</option>
                                 <option value="draw">Remis</option>
                                 <option value="loss">Niederlagen</option>
-                                <option value="1/2-1/2">½-½ (alle Remis)</option>
                                 <option value="*">* Unbekannt</option>
                             </select>
                         </div>
                         <div class="col-6 col-md-2">
                             <select id="sort-by" class="form-select form-select-sm">
-                                <option value="createdAt-desc">Neueste zuerst</option>
-                                <option value="createdAt-asc">Älteste zuerst</option>
                                 <option value="date-desc">Datum (neu)</option>
                                 <option value="date-asc">Datum (alt)</option>
                                 <option value="opponent-asc">Gegner A–Z</option>
@@ -594,6 +591,14 @@
                     <div class="ms-auto d-flex gap-2 flex-wrap">
                         <button class="btn btn-sm btn-outline-secondary" onclick="editCurrentGame()"><i class="bi bi-pencil me-1"></i>Bearbeiten</button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="exportPGN()"><i class="bi bi-filetype-txt me-1"></i>PGN</button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="openInLichess()" id="lichess-btn" title="Partie in Lichess Analyse öffnen (alle Züge)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 65" style="height:14px;width:11px;vertical-align:-.1em;fill:currentColor" aria-hidden="true"><path d="M38.956.5c-3.53.418-6.452 2.118-8.955 5.605C28.797 8.032 28 10.35 28 12.2v1.5l-1.388 1.690C24.687 17.57 16.946 27.521 16.125 28.5l-.406.5H14.5c-2.4 0-4.046.468-5.96 1.614C4.93 32.34 2.5 36.925 2.5 42c0 8.01 5.53 15.034 13.5 16.924V62h18v-3.076C41.97 57.034 47.5 50.01 47.5 42c0-5.075-2.43-9.66-6.04-11.886C39.546 28.968 37.9 28.5 35.5 28.5h-1.219l-.406-.5c-.82-.98-8.561-10.93-10.487-13.31L22 13.7v-1.5c0-1.85-.797-4.168-1.999-6.095C17.454 2.618 14.532.918 11 .5H9.5v1.5c0 3.9 2.25 6.86 5.606 7.532L16.5 9.8V28h17V9.8l1.394-.268C38.25 8.86 40.5 5.9 40.5 2V.5H38.956z"/></svg>
+                            Lichess
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="openPositionInLichess()" title="Aktuelle Stellung in Lichess analysieren (L)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 65" style="height:13px;width:10px;vertical-align:-.1em;fill:currentColor" aria-hidden="true"><path d="M38.956.5c-3.53.418-6.452 2.118-8.955 5.605C28.797 8.032 28 10.35 28 12.2v1.5l-1.388 1.690C24.687 17.57 16.946 27.521 16.125 28.5l-.406.5H14.5c-2.4 0-4.046.468-5.96 1.614C4.93 32.34 2.5 36.925 2.5 42c0 8.01 5.53 15.034 13.5 16.924V62h18v-3.076C41.97 57.034 47.5 50.01 47.5 42c0-5.075-2.43-9.66-6.04-11.886C39.546 28.968 37.9 28.5 35.5 28.5h-1.219l-.406-.5c-.82-.98-8.561-10.93-10.487-13.31L22 13.7v-1.5c0-1.85-.797-4.168-1.999-6.095C17.454 2.618 14.532.918 11 .5H9.5v1.5c0 3.9 2.25 6.86 5.606 7.532L16.5 9.8V28h17V9.8l1.394-.268C38.25 8.86 40.5 5.9 40.5 2V.5H38.956z"/></svg>
+                            Stellung
+                        </button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="showView('list')"><i class="bi bi-arrow-left me-1"></i>Zurück</button>
                     </div>
                 </div>
@@ -1269,23 +1274,42 @@ function myResult(g) {
 }
 
 function renderStats(games) {
-    const total = games.length;
+    const total   = games.length;
     const myGames = games.filter(g => myResult(g) !== null);
-    const wins   = myGames.filter(g => myResult(g) === 'win').length;
-    const draws  = myGames.filter(g => myResult(g) === 'draw').length;
-    const losses = myGames.filter(g => myResult(g) === 'loss').length;
+    const wins    = myGames.filter(g => myResult(g) === 'win').length;
+    const draws   = myGames.filter(g => myResult(g) === 'draw').length;
+    const losses  = myGames.filter(g => myResult(g) === 'loss').length;
+    const rated   = myGames.length;
+    const winPct  = rated ? Math.round((wins + draws * 0.5) / rated * 100) : null;
+    const winPctLabel = winPct !== null ? `${winPct}%` : '–';
+
     document.getElementById('stats-row').innerHTML = [
-        [total,  'Partien gesamt', 'var(--text)'],
-        [wins,   'Siege',          '#4ade80'],
-        [draws,  'Remis',          '#facc15'],
-        [losses, 'Niederlagen',    '#f87171'],
-    ].map(([n, label, color]) => `
+        [total,       'Partien gesamt', 'var(--text)',  null],
+        [wins,        'Siege',          '#4ade80',      null],
+        [draws,       'Remis',          '#facc15',      null],
+        [losses,      'Niederlagen',    '#f87171',      null],
+    ].map(([n, label, color, _]) => `
         <div class="col-6 col-md-3">
             <div class="stat-card">
                 <div class="stat-number" style="color:${color}">${n}</div>
                 <div class="small text-muted mt-1">${label}</div>
             </div>
-        </div>`).join('');
+        </div>`).join('') + `
+        <div class="col-12 col-md-12 mt-1">
+            <div class="stat-card py-2">
+                <div class="d-flex align-items-center gap-2 px-1" style="min-height:22px">
+                    <small class="text-muted" style="white-space:nowrap;min-width:70px">Score: <span style="color:var(--text);font-weight:700">${winPctLabel}</span></small>
+                    ${rated ? `
+                    <div class="flex-grow-1" style="height:10px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden;position:relative">
+                        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(wins/rated*100)}%;background:#4ade80;border-radius:6px 0 0 6px"></div>
+                        <div style="position:absolute;left:${Math.round(wins/rated*100)}%;top:0;height:100%;width:${Math.round(draws/rated*100)}%;background:#facc15"></div>
+                        <div style="position:absolute;left:${Math.round((wins+draws)/rated*100)}%;top:0;height:100%;width:${Math.round(losses/rated*100)}%;background:#f87171;border-radius:0 6px 6px 0"></div>
+                    </div>
+                    <small class="text-muted" style="white-space:nowrap">${wins}S · ${draws}R · ${losses}N</small>
+                    ` : '<small class="text-muted">Noch keine gewerteten Partien</small>'}
+                </div>
+            </div>
+        </div>`;
 }
 
 // Returns the opponent name relative to MY_NAME
@@ -1326,11 +1350,9 @@ function renderList() {
         [g.white, g.black, g.event, g.site, g.eco, g.opening].some(v => (v || '').toLowerCase().includes(search))
     );
 
-    // Filter: my result perspective or special values
+    // Filter by result (always from MY_NAME's perspective)
     if (filterV === 'win' || filterV === 'draw' || filterV === 'loss') {
         games = games.filter(g => myResult(g) === filterV);
-    } else if (filterV === '1/2-1/2') {
-        games = games.filter(g => g.result === '1/2-1/2');
     } else if (filterV === '*') {
         games = games.filter(g => g.result === '*');
     }
@@ -1404,6 +1426,15 @@ function resetForm() {
     document.getElementById('pgn-raw').value = '';
     document.getElementById('pgn-val-msg').innerHTML = '';
     document.getElementById('form-title').textContent = 'Neue Partie';
+    // Pre-fill MY_NAME in the most recently used colour, default white
+    const lastColor = localStorage.getItem('chess_my_color') || 'white';
+    if (lastColor === 'white') {
+        document.getElementById('f-white').value = MY_NAME;
+    } else {
+        document.getElementById('f-black').value = MY_NAME;
+    }
+    // Pre-fill today's date
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
     BoardInput.reset();
 }
 
@@ -1500,6 +1531,12 @@ document.getElementById('game-form').addEventListener('submit', async function(e
         notes:       document.getElementById('f-notes').value.trim(),
         plyCount:    pgnPlyCount(pgn),
     };
+
+    // Remember which side I played for next new game
+    const meWhite = game.white.trim().toLowerCase() === MY_NAME.toLowerCase();
+    const meBlack = game.black.trim().toLowerCase() === MY_NAME.toLowerCase();
+    if (meWhite) localStorage.setItem('chess_my_color', 'white');
+    else if (meBlack) localStorage.setItem('chess_my_color', 'black');
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Speichern…';
@@ -1761,7 +1798,7 @@ const Viewer = {
         this._hideAnnotationPanel();
 
         document.getElementById('v-title').textContent      = `${g.white || '?'} vs ${g.black || '?'}`;
-        document.getElementById('v-result-badge').innerHTML = resultBadge(g.result);
+        document.getElementById('v-result-badge').innerHTML = myResultBadge(g);
         document.getElementById('v-subtitle').textContent   =
             [g.event, g.site, fmtDate(g.date), g.round ? 'Runde ' + g.round : ''].filter(Boolean).join(' · ');
 
@@ -2200,6 +2237,48 @@ function viewGame(id) {
 }
 
 // ══════════════════════════════════════════════════════════
+// LICHESS ANALYSIS
+// ══════════════════════════════════════════════════════════
+async function openInLichess() {
+    const g = Viewer.currentGame;
+    if (!g || !g.pgn) { showToast('Keine PGN vorhanden.', 'warning'); return; }
+    const btn = document.getElementById('lichess-btn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>…';
+    try {
+        // Build full PGN with headers
+        const headers = [
+            ['Event', g.event || '?'], ['Site', g.site || '?'],
+            ['Date',  g.date  || '???.??.??'],
+            ['White', g.white || '?'], ['Black', g.black || '?'],
+            ['Result', g.result || '*'],
+        ].map(([k,v]) => `[${k} "${v}"]`).join('\n');
+        const fullPgn = headers + '\n\n' + (g.pgn || '*');
+        const body = new URLSearchParams({ pgn: fullPgn });
+        const r = await fetch('https://lichess.org/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        window.open(data.url, '_blank');
+    } catch(e) {
+        showToast('Lichess-Import fehlgeschlagen: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+function openPositionInLichess() {
+    if (!Viewer.chess) return;
+    const fen = Viewer.chess.fen();
+    window.open('https://lichess.org/analysis/' + encodeURIComponent(fen), '_blank');
+}
+
+// ══════════════════════════════════════════════════════════
 // EXPORT / IMPORT
 // ══════════════════════════════════════════════════════════
 function exportPGN() {
@@ -2443,6 +2522,8 @@ document.addEventListener('keydown', e => {
         End:        () => Viewer.goLast(),
         f:          () => Viewer.flip(),
         F:          () => Viewer.flip(),
+        l:          () => openPositionInLichess(),
+        L:          () => openInLichess(),
         ' ':        () => Viewer.toggleAutoplay(),
     };
     if (map[e.key]) { e.preventDefault(); map[e.key](); }
