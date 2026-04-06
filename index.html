@@ -2239,43 +2239,37 @@ function viewGame(id) {
 // ══════════════════════════════════════════════════════════
 // LICHESS ANALYSIS
 // ══════════════════════════════════════════════════════════
-async function openInLichess() {
+function openInLichess() {
     const g = Viewer.currentGame;
     if (!g || !g.pgn) { showToast('Keine PGN vorhanden.', 'warning'); return; }
-    const btn = document.getElementById('lichess-btn');
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>…';
-    try {
-        // Build full PGN with headers
-        const headers = [
-            ['Event', g.event || '?'], ['Site', g.site || '?'],
-            ['Date',  g.date  || '???.??.??'],
-            ['White', g.white || '?'], ['Black', g.black || '?'],
-            ['Result', g.result || '*'],
-        ].map(([k,v]) => `[${k} "${v}"]`).join('\n');
-        const fullPgn = headers + '\n\n' + (g.pgn || '*');
-        const body = new URLSearchParams({ pgn: fullPgn });
-        const r = await fetch('https://lichess.org/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString()
-        });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const data = await r.json();
-        window.open(data.url, '_blank');
-    } catch(e) {
-        showToast('Lichess-Import fehlgeschlagen: ' + e.message, 'danger');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = orig;
-    }
+    const headers = [
+        ['Event', g.event || '?'], ['Site', g.site || '?'],
+        ['Date',  g.date  || '???.??.??'],
+        ['White', g.white || '?'], ['Black', g.black || '?'],
+        ['Result', g.result || '*'],
+    ].map(([k,v]) => `[${k} "${v}"]`).join('\n');
+    const fullPgn = headers + '\n\n' + (g.pgn || '*');
+    // Use a hidden form POST — avoids CORS entirely, Lichess redirects to analysis
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://lichess.org/paste';
+    form.target = '_blank';
+    form.style.display = 'none';
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'pgn'; inp.value = fullPgn;
+    form.appendChild(inp);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
 }
 
 function openPositionInLichess() {
     if (!Viewer.chess) return;
     const fen = Viewer.chess.fen();
-    window.open('https://lichess.org/analysis/' + encodeURIComponent(fen), '_blank');
+    // Lichess URL format: board slashes stay as-is, spaces become underscores
+    // e.g. "rnbq.../pppp... w KQkq - 0 1" → "/analysis/standard/rnbq.../pppp..._w_KQkq_-_0_1"
+    const fenPath = fen.replace(/ /g, '_');
+    window.open('https://lichess.org/analysis/standard/' + fenPath, '_blank');
 }
 
 // ══════════════════════════════════════════════════════════
