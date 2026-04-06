@@ -131,19 +131,25 @@
 
         /* PGN comments & annotations */
         .pgn-comment {
-            color: #7dcfff; font-style: italic; font-size: .88rem;
-            margin: 0 4px; display: inline;
+            color: #7dcfff; font-style: italic; font-size: .87rem;
+            display: inline-block; margin: 3px 2px 3px 4px;
+            background: rgba(125,207,255,.09); padding: 1px 6px;
+            border-radius: 4px; border-left: 2px solid rgba(125,207,255,.45);
+            line-height: 1.5; vertical-align: middle;
         }
         .pgn-nag {
             color: #ff9e64; font-size: .92rem; margin-left: 1px;
         }
         /* variation (indented, dimmer) */
         .pgn-variation {
-            display: block; margin: 2px 0 2px 1.6em;
+            display: block; margin: 3px 0 3px 1.6em;
             color: #a0a0c0; font-size: .88rem; border-left: 2px solid var(--border);
             padding-left: .6em;
         }
-        .pgn-variation .move-btn { font-size: .88rem; color: #c0c0e0; }
+        .pgn-variation .move-btn {
+            font-size: .88rem; color: #c0c0e0; cursor: pointer;
+        }
+        .pgn-variation .move-btn:hover { background: rgba(233,69,96,.28); color: #fff; }
         .pgn-variation .move-number { font-size: .80rem; }
 
         .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
@@ -152,11 +158,11 @@
         /* NAG badge on board square */
         #nag-badge-overlay {
             position: absolute; bottom: 3px; right: 3px;
-            width: 24px; height: 24px; border-radius: 50%;
-            color: #fff; font-size: 12px; font-weight: 700;
+            width: 32px; height: 32px; border-radius: 50%;
+            color: #fff; font-size: 14px; font-weight: 800;
             display: flex; align-items: center; justify-content: center;
             z-index: 20; pointer-events: none;
-            box-shadow: 0 1px 5px rgba(0,0,0,.85);
+            box-shadow: 0 2px 6px rgba(0,0,0,.9), 0 0 0 2px rgba(0,0,0,.4);
             line-height: 1; user-select: none;
         }
 
@@ -362,6 +368,8 @@
                                 <option value="date-asc">Datum (alt)</option>
                                 <option value="opponent-asc">Gegner A–Z</option>
                                 <option value="opponent-desc">Gegner Z–A</option>
+                                <option value="oppElo-desc">Gegner Elo ↓</option>
+                                <option value="oppElo-asc">Gegner Elo ↑</option>
                                 <option value="eco-asc">ECO A–Z</option>
                                 <option value="eco-desc">ECO Z–A</option>
                             </select>
@@ -1288,6 +1296,22 @@ function opponentOf(g) {
     return g.black || g.white || '';
 }
 
+// Returns the opponent's ELO as a number
+function opponentEloOf(g) {
+    const me = MY_NAME.toLowerCase();
+    if ((g.white || '').toLowerCase() === me) return parseInt(g.blackElo) || 0;
+    if ((g.black || '').toLowerCase() === me) return parseInt(g.whiteElo) || 0;
+    return parseInt(g.blackElo) || parseInt(g.whiteElo) || 0;
+}
+
+// Result badge coloured from MY_NAME's perspective
+function myResultBadge(g) {
+    const res = myResult(g);
+    const label = g.result === '1/2-1/2' ? '½-½' : (g.result || '*');
+    const cls = res === 'win' ? 'bg-success' : res === 'loss' ? 'bg-danger' : res === 'draw' ? 'bg-warning text-dark' : 'bg-secondary';
+    return `<span class="badge ${cls}">${label}</span>`;
+}
+
 function renderList() {
     const search  = document.getElementById('search-input').value.toLowerCase();
     const filterV = document.getElementById('filter-result').value;
@@ -1314,10 +1338,14 @@ function renderList() {
     const [field, dir] = sortBy.split('-');
     const asc = dir === 'asc';
     games.sort((a, b) => {
-        let va, vb;
+        let va, vb, numeric = false;
         if (field === 'opponent') {
             va = opponentOf(a).toLowerCase();
             vb = opponentOf(b).toLowerCase();
+        } else if (field === 'oppElo') {
+            va = opponentEloOf(a);
+            vb = opponentEloOf(b);
+            numeric = true;
         } else if (field === 'eco') {
             va = (a.eco || '').toLowerCase();
             vb = (b.eco || '').toLowerCase();
@@ -1326,7 +1354,7 @@ function renderList() {
             vb = b[field] ?? '';
         }
         if (!asc) [va, vb] = [vb, va];
-        return va < vb ? -1 : va > vb ? 1 : 0;
+        return numeric ? (va - vb) : (va < vb ? -1 : va > vb ? 1 : 0);
     });
 
     const tbody = document.getElementById('games-tbody');
@@ -1342,7 +1370,7 @@ function renderList() {
             <td class="text-muted small">${g.whiteElo || '–'}</td>
             <td class="fw-semibold">${esc(g.black || '?')}</td>
             <td class="text-muted small">${g.blackElo || '–'}</td>
-            <td>${resultBadge(g.result)}</td>
+            <td>${myResultBadge(g)}</td>
             <td class="small text-muted">${fmtDate(g.date)}</td>
             <td class="small text-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.event || '')}</td>
             <td>${g.eco ? `<code>${esc(g.eco)}</code>` : ''}</td>
@@ -1722,6 +1750,7 @@ const Viewer = {
     currentGame:  null,
     orientation:  'white',
     _hlSquares:   [],
+    _varPaths:    [],   // [{preconditionSans:[], sans:[]}] registered at render time
 
     load(id) {
         const g = DB.get(id);
@@ -1794,48 +1823,108 @@ const Viewer = {
 
     // ── Render move list with comments, NAGs, variations ──
     _renderMoveList() {
+        this._varPaths = [];  // reset registered variation paths
         const el = document.getElementById('move-list');
         if (!this.tree.length) { el.innerHTML = '<span style="color:var(--muted)">Keine Züge vorhanden.</span>'; return; }
-        el.innerHTML = this._renderLine(this.tree, false);
+        el.innerHTML = this._renderLine(this.tree);
     },
 
-    _renderLine(nodes, isVariation) {
+    // Renders the main line (uses pre-computed plyIndex on nodes)
+    _renderLine(nodes) {
         let html = '';
         let moveCount = 0;
         for (const node of nodes) {
             if (!node.san) {
-                // comment-only node
                 if (node.comment) html += `<span class="pgn-comment">{ ${esc(node.comment)} }</span> `;
                 continue;
             }
-            // Move number (show for white or after variation)
-            const ply = node.plyIndex !== undefined ? node.plyIndex : -1;
+            const ply = node.plyIndex !== undefined ? node.plyIndex : 0;
             const isWhiteMove = (ply % 2 === 0);
             if (isWhiteMove || moveCount === 0) {
                 const num = Math.floor(ply / 2) + 1;
                 html += `<span class="move-number">${num}${isWhiteMove ? '.' : '…'}</span>`;
             }
-            // The move button (only clickable on main line)
-            if (!isVariation) {
-                html += `<button class="move-btn" id="mb-${ply}" onclick="Viewer.goTo(${ply})">${esc(node.san)}</button>`;
-            } else {
-                html += `<span class="move-btn" style="cursor:default">${esc(node.san)}</span>`;
-            }
-            // NAGs
+            html += `<button class="move-btn" id="mb-${ply}" onclick="Viewer.goTo(${ply})">${esc(node.san)}</button>`;
             for (const nag of node.nags) {
                 const sym = NAG_SYMBOLS[nag];
                 if (sym) html += `<span class="pgn-nag">${sym}</span>`;
             }
-            // Comment
             if (node.comment) html += ` <span class="pgn-comment">{ ${esc(node.comment)} }</span>`;
             html += ' ';
-            // Variations
+            // Variations: register path and render as clickable
             for (const varLine of node.variations) {
-                html += `<span class="pgn-variation">(${this._renderLine(varLine, true)})</span>`;
+                const pathIdx = this._varPaths.length;
+                const preconditionSans = this.flatMoves.slice(0, ply + 1).map(m => m.san);
+                const sans = varLine.filter(n => n.san).map(n => n.san);
+                this._varPaths.push({ preconditionSans, sans });
+                html += `<span class="pgn-variation">(${this._renderVarLine(varLine, pathIdx, ply)})</span>`;
             }
             moveCount++;
         }
         return html;
+    },
+
+    // Renders a variation line with clickable move buttons
+    // parentPly: the main-line plyIndex of the node that owns this variation
+    _renderVarLine(nodes, pathIdx, parentPly) {
+        let html = '';
+        let sanIdx = 0;  // index among san-nodes only
+        for (const node of nodes) {
+            if (!node.san) {
+                if (node.comment) html += `<span class="pgn-comment">{ ${esc(node.comment)} }</span> `;
+                continue;
+            }
+            const globalPly = parentPly + 1 + sanIdx;
+            const isWhiteMove = (globalPly % 2 === 0);
+            if (isWhiteMove || sanIdx === 0) {
+                const num = Math.floor(globalPly / 2) + 1;
+                html += `<span class="move-number">${num}${isWhiteMove ? '.' : '…'}</span>`;
+            }
+            html += `<button class="move-btn" data-vp="${pathIdx}" data-vi="${sanIdx}" onclick="Viewer.goVarMove(${pathIdx},${sanIdx})">${esc(node.san)}</button>`;
+            for (const nag of (node.nags || [])) {
+                const sym = NAG_SYMBOLS[nag];
+                if (sym) html += `<span class="pgn-nag">${sym}</span>`;
+            }
+            if (node.comment) html += ` <span class="pgn-comment">{ ${esc(node.comment)} }</span>`;
+            html += ' ';
+            // Sub-variations (recursive — fully clickable)
+            for (const subVarLine of (node.variations || [])) {
+                const subPathIdx = this._varPaths.length;
+                const parentPath = this._varPaths[pathIdx];
+                const subPrecond = [...parentPath.preconditionSans, ...parentPath.sans.slice(0, sanIdx + 1)];
+                const subSans    = subVarLine.filter(n => n.san).map(n => n.san);
+                this._varPaths.push({ preconditionSans: subPrecond, sans: subSans });
+                html += `<span class="pgn-variation">(${this._renderVarLine(subVarLine, subPathIdx, globalPly)})</span>`;
+            }
+            sanIdx++;
+        }
+        return html;
+    },
+
+    // Navigate to a specific move within a registered variation path
+    goVarMove(pathIdx, sanIdx) {
+        const path = this._varPaths[pathIdx];
+        if (!path) return;
+        this.stopAutoplay();
+        this.chess.reset();
+        for (const san of path.preconditionSans) { if (!this.chess.move(san)) break; }
+        for (let i = 0; i <= sanIdx; i++)         { if (!this.chess.move(path.sans[i])) break; }
+        this.board.position(this.chess.fen());
+        this._clearHighlight();
+        const hist = this.chess.history({ verbose: true });
+        if (hist.length) {
+            const last = hist[hist.length - 1];
+            const fromEl = document.querySelector(`[data-square="${last.from}"]`);
+            const toEl   = document.querySelector(`[data-square="${last.to}"]`);
+            if (fromEl) { fromEl.classList.add('highlight-from'); this._hlSquares.push(last.from); }
+            if (toEl)   { toEl.classList.add('highlight-to');     this._hlSquares.push(last.to); }
+        }
+        // Highlight active button
+        document.querySelectorAll('#move-list .move-btn').forEach(b => b.classList.remove('active'));
+        const btn = document.querySelector(`[data-vp="${pathIdx}"][data-vi="${sanIdx}"]`);
+        if (btn) { btn.classList.add('active'); btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+        this._updateCounter();
+        this._hideAnnotationPanel();
     },
 
     // ── Board navigation ──
