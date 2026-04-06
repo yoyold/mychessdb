@@ -115,10 +115,10 @@
 
         /* ── VIEWER / MOVE LIST ──────────────────────────── */
         #viewer-board, #input-board { width: 100%; }
-        /* Lichess "Blue" board theme */
-        .board-b72b1 { border: 3px solid #3e5f77 !important; border-radius: 2px; overflow: hidden; }
-        .white-1e1d7 { background-color: #dee3e6 !important; }
-        .black-3c85d { background-color: #8ca2ad !important; }
+        /* Lichess "Blue" board theme — darker */
+        .board-b72b1 { border: 3px solid #2d4a5a !important; border-radius: 2px; overflow: hidden; }
+        .white-1e1d7 { background-color: #9fb6c1 !important; }
+        .black-3c85d { background-color: #4d7383 !important; }
 
         /* move list */
         .move-list { font-family: 'Courier New', monospace; overflow-y: auto; line-height: 2.0; font-size: 1.05rem; }
@@ -865,17 +865,9 @@
 const MY_NAME = 'Dony, Lukas';
 const SETTINGS_KEY = 'chess_settings';
 
-// Wikimedia Commons SVG chess pieces (Cburnett set)
-const _PIECES = {
-    wK:'4/42/Chess_klt45.svg', wQ:'1/15/Chess_qlt45.svg', wR:'7/72/Chess_rlt45.svg',
-    wB:'b/b1/Chess_blt45.svg', wN:'7/70/Chess_nlt45.svg', wP:'4/45/Chess_plt45.svg',
-    bK:'f/f0/Chess_kdt45.svg', bQ:'4/47/Chess_qdt45.svg', bR:'f/ff/Chess_rdt45.svg',
-    bB:'9/98/Chess_bdt45.svg', bN:'e/ef/Chess_ndt45.svg', bP:'c/c7/Chess_pdt45.svg',
-};
+// Merida chess pieces — hosted in the Lichess (lila) GitHub repository
 function pieceTheme(piece) {
-    return _PIECES[piece]
-        ? `https://upload.wikimedia.org/wikipedia/commons/${_PIECES[piece]}`
-        : '';
+    return `https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/merida/${piece}.svg`;
 }
 
 function esc(s) {
@@ -2256,35 +2248,29 @@ function viewGame(id) {
 // ══════════════════════════════════════════════════════════
 // LICHESS ANALYSIS
 // ══════════════════════════════════════════════════════════
-async function openInLichess() {
+function openInLichess() {
     const g = Viewer.currentGame;
     if (!g || !g.pgn) { showToast('Keine PGN vorhanden.', 'warning'); return; }
-    const btn = document.getElementById('lichess-btn');
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>…';
-    try {
-        const hdrs = [
-            ['Event', g.event || '?'], ['Site', g.site || '?'],
-            ['Date',  g.date  || '???.??.??'],
-            ['White', g.white || '?'], ['Black', g.black || '?'],
-            ['Result', g.result || '*'],
-        ].map(([k,v]) => `[${k} "${v}"]`).join('\n');
-        const fullPgn = hdrs + '\n\n' + (g.pgn || '*');
-        // URLSearchParams body = application/x-www-form-urlencoded = CORS simple request (no preflight)
-        const r = await fetch('https://lichess.org/api/import', {
-            method: 'POST',
-            body: new URLSearchParams({ pgn: fullPgn })
-        });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const data = await r.json();
-        window.open(data.url + '/analysis', '_blank');
-    } catch(e) {
-        showToast('Lichess-Import fehlgeschlagen: ' + e.message, 'danger');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = orig;
-    }
+    const hdrs = [
+        ['Event', g.event || '?'], ['Site', g.site || '?'],
+        ['Date',  g.date  || '???.??.??'],
+        ['White', g.white || '?'], ['Black', g.black || '?'],
+        ['Result', g.result || '*'],
+    ].map(([k,v]) => `[${k} "${v}"]`).join('\n');
+    const fullPgn = hdrs + '\n\n' + (g.pgn || '*');
+    // Form POST in a new tab — bypasses CORS entirely (browser navigation, not XHR)
+    // Lichess /api/import redirects to the game page which the browser follows normally
+    const form = document.createElement('form');
+    form.method  = 'POST';
+    form.action  = 'https://lichess.org/api/import';
+    form.target  = '_blank';
+    form.style.display = 'none';
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'pgn'; inp.value = fullPgn;
+    form.appendChild(inp);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
 }
 
 function openPositionInLichess() {
