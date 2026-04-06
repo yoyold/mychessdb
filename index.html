@@ -153,7 +153,7 @@
         .pgn-variation .move-number { font-size: .80rem; }
 
         .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
-        #v-white-name, #v-black-name { color: var(--text) !important; }
+        #v-top-name, #v-bottom-name { color: var(--text) !important; }
 
         /* NAG badge on board square */
         #nag-badge-overlay {
@@ -606,18 +606,18 @@
                         <div class="card-body p-2 p-md-3">
                             <div class="player-bar mb-1">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span style="width:14px;height:14px;background:#1a1a1a;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
-                                    <span class="fw-semibold" id="v-black-name"></span>
+                                    <span id="v-top-color" style="width:14px;height:14px;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold" id="v-top-name"></span>
                                 </div>
-                                <span class="text-muted small" id="v-black-elo"></span>
+                                <span class="text-muted small" id="v-top-elo"></span>
                             </div>
                             <div id="viewer-board" style="max-width:740px;margin:0 auto"></div>
                             <div class="player-bar mt-1">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span style="width:14px;height:14px;background:#f0d9b5;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
-                                    <span class="fw-semibold" id="v-white-name"></span>
+                                    <span id="v-bottom-color" style="width:14px;height:14px;border:2px solid #888;border-radius:50%;flex-shrink:0"></span>
+                                    <span class="fw-semibold" id="v-bottom-name"></span>
                                 </div>
-                                <span class="text-muted small" id="v-white-elo"></span>
+                                <span class="text-muted small" id="v-bottom-elo"></span>
                             </div>
                             <!-- Controls -->
                             <div class="d-flex justify-content-center gap-1 mt-3">
@@ -1765,11 +1765,6 @@ const Viewer = {
         document.getElementById('v-subtitle').textContent   =
             [g.event, g.site, fmtDate(g.date), g.round ? 'Runde ' + g.round : ''].filter(Boolean).join(' · ');
 
-        document.getElementById('v-white-name').textContent = g.white || '?';
-        document.getElementById('v-black-name').textContent = g.black || '?';
-        document.getElementById('v-white-elo').textContent  = g.whiteElo ? 'Elo ' + g.whiteElo : '';
-        document.getElementById('v-black-elo').textContent  = g.blackElo ? 'Elo ' + g.blackElo : '';
-
         const rows = [
             ['Turnier','event'],['Ort','site'],['Datum','date'],
             ['Runde','round'],['ECO','eco'],['Eröffnung','opening'],['Zeitkontrolle','timeControl']
@@ -1805,6 +1800,7 @@ const Viewer = {
 
         const iAmBlack = (g.black || '').trim().toLowerCase() === MY_NAME.toLowerCase();
         this.orientation = iAmBlack ? 'black' : 'white';
+        this._updatePlayerBars();   // must be after orientation is set
 
         if (!this.board) {
             this.board = Chessboard('viewer-board', {
@@ -1852,12 +1848,14 @@ const Viewer = {
             if (node.comment) html += ` <span class="pgn-comment">{ ${esc(node.comment)} }</span>`;
             html += ' ';
             // Variations: register path and render as clickable
+            // preconditionSans = moves BEFORE ply (variation is an alternative TO move at ply)
+            // parentPly passed as ply-1 so first var move gets globalPly = ply (same move number)
             for (const varLine of node.variations) {
                 const pathIdx = this._varPaths.length;
-                const preconditionSans = this.flatMoves.slice(0, ply + 1).map(m => m.san);
+                const preconditionSans = this.flatMoves.slice(0, ply).map(m => m.san);
                 const sans = varLine.filter(n => n.san).map(n => n.san);
                 this._varPaths.push({ preconditionSans, sans });
-                html += `<span class="pgn-variation">(${this._renderVarLine(varLine, pathIdx, ply)})</span>`;
+                html += `<span class="pgn-variation">(${this._renderVarLine(varLine, pathIdx, ply - 1)})</span>`;
             }
             moveCount++;
         }
@@ -1888,13 +1886,15 @@ const Viewer = {
             if (node.comment) html += ` <span class="pgn-comment">{ ${esc(node.comment)} }</span>`;
             html += ' ';
             // Sub-variations (recursive — fully clickable)
+            // subPrecond = parent precond + parent sans BEFORE sanIdx (alternative TO current move)
+            // pass globalPly-1 so first sub-var move gets same globalPly as current node
             for (const subVarLine of (node.variations || [])) {
                 const subPathIdx = this._varPaths.length;
                 const parentPath = this._varPaths[pathIdx];
-                const subPrecond = [...parentPath.preconditionSans, ...parentPath.sans.slice(0, sanIdx + 1)];
+                const subPrecond = [...parentPath.preconditionSans, ...parentPath.sans.slice(0, sanIdx)];
                 const subSans    = subVarLine.filter(n => n.san).map(n => n.san);
                 this._varPaths.push({ preconditionSans: subPrecond, sans: subSans });
-                html += `<span class="pgn-variation">(${this._renderVarLine(subVarLine, subPathIdx, globalPly)})</span>`;
+                html += `<span class="pgn-variation">(${this._renderVarLine(subVarLine, subPathIdx, globalPly - 1)})</span>`;
             }
             sanIdx++;
         }
@@ -2044,6 +2044,27 @@ const Viewer = {
     flip() {
         this.orientation = this.orientation === 'white' ? 'black' : 'white';
         this.board.flip();
+        this._updatePlayerBars();
+    },
+
+    // ── Sync top/bottom player labels to current board orientation ──
+    _updatePlayerBars() {
+        const g = this.currentGame;
+        if (!g) return;
+        const whiteAtBottom = (this.orientation === 'white');
+        // top = the player whose pieces are at the far end of the board
+        const topName  = whiteAtBottom ? (g.black || '?')    : (g.white || '?');
+        const topElo   = whiteAtBottom ? g.blackElo           : g.whiteElo;
+        const topBg    = whiteAtBottom ? '#1a1a1a'            : '#f0d9b5';
+        const botName  = whiteAtBottom ? (g.white || '?')    : (g.black || '?');
+        const botElo   = whiteAtBottom ? g.whiteElo           : g.blackElo;
+        const botBg    = whiteAtBottom ? '#f0d9b5'            : '#1a1a1a';
+        document.getElementById('v-top-name').textContent    = topName;
+        document.getElementById('v-top-elo').textContent     = topElo  ? 'Elo ' + topElo  : '';
+        document.getElementById('v-top-color').style.background = topBg;
+        document.getElementById('v-bottom-name').textContent = botName;
+        document.getElementById('v-bottom-elo').textContent  = botElo ? 'Elo ' + botElo : '';
+        document.getElementById('v-bottom-color').style.background = botBg;
     },
 
     stopAutoplay() {
